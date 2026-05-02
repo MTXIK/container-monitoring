@@ -153,6 +153,9 @@ func TestHandlerProcessesEventMessage(t *testing.T) {
 	if len(store.incidents) != 1 {
 		t.Fatalf("incidents = %d, want 1", len(store.incidents))
 	}
+	if len(store.targets) != 1 || store.targets[0].Status != "CRITICAL" {
+		t.Fatalf("target status = %#v, want CRITICAL", store.targets)
+	}
 	if store.incidents[0].RuleID != "container_died" {
 		t.Fatalf("incident RuleID = %q, want container_died", store.incidents[0].RuleID)
 	}

@@ -26,7 +26,7 @@ func (s *Store) Connect(ctx context.Context) error {
 		return err
 	}
 	s.pool = pool
-	return nil
+	return s.ensureFrontendSchema(ctx)
 }
 
 func (s *Store) Ping(ctx context.Context) error {
@@ -56,12 +56,18 @@ func (s *Store) UpsertTarget(ctx context.Context, target domain.Target) error {
 		return err
 	}
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO containers (id, node_id, name, image)
-		VALUES ($1, $2, $3, '')
+		INSERT INTO containers (id, node_id, name, image, source, external_id, status, labels, last_seen_at, updated_at)
+		VALUES ($1, $2, $3, '', $4, $5, $6, $7, $8, now())
 		ON CONFLICT (id) DO UPDATE SET
 			node_id = EXCLUDED.node_id,
-			name = EXCLUDED.name
-	`, target.ID, target.NodeID, target.Name)
+			name = EXCLUDED.name,
+			source = EXCLUDED.source,
+			external_id = EXCLUDED.external_id,
+			status = EXCLUDED.status,
+			labels = EXCLUDED.labels,
+			last_seen_at = EXCLUDED.last_seen_at,
+			updated_at = now()
+	`, target.ID, target.NodeID, target.Name, defaultString(target.Source, "docker"), defaultString(target.ExternalID, target.ID), defaultString(target.Status, "OK"), jsonMap(target.Labels), defaultTime(target.LastSeenAt))
 	return err
 }
 
@@ -162,7 +168,7 @@ func (s *Store) ListTargets(ctx context.Context) ([]domain.Target, error) {
 		return nil, err
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, name, node_id, created_at
+		SELECT id, name, node_id, source, external_id, status, labels, last_seen_at, created_at, updated_at
 		FROM containers
 		ORDER BY name
 	`)
@@ -173,14 +179,14 @@ func (s *Store) ListTargets(ctx context.Context) ([]domain.Target, error) {
 	var targets []domain.Target
 	for rows.Next() {
 		var target domain.Target
-		var createdAt time.Time
-		if err := rows.Scan(&target.ID, &target.Name, &target.NodeID, &createdAt); err != nil {
+		var labels []byte
+		if err := rows.Scan(&target.ID, &target.Name, &target.NodeID, &target.Source, &target.ExternalID, &target.Status, &labels, &target.LastSeenAt, &target.CreatedAt, &target.UpdatedAt); err != nil {
 			return nil, err
 		}
 		target.Type = "container"
-		target.Source = "docker"
-		target.ExternalID = target.ID
-		target.CreatedAt = createdAt
+		if err := json.Unmarshal(labels, &target.Labels); err != nil {
+			return nil, err
+		}
 		targets = append(targets, target)
 	}
 	return targets, rows.Err()
@@ -191,17 +197,63 @@ func (s *Store) GetTarget(ctx context.Context, id string) (domain.Target, error)
 		return domain.Target{}, err
 	}
 	var target domain.Target
-	var createdAt time.Time
+	var labels []byte
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, name, node_id, created_at
+		SELECT id, name, node_id, source, external_id, status, labels, last_seen_at, created_at, updated_at
 		FROM containers
 		WHERE id = $1
-	`, id).Scan(&target.ID, &target.Name, &target.NodeID, &createdAt)
+	`, id).Scan(&target.ID, &target.Name, &target.NodeID, &target.Source, &target.ExternalID, &target.Status, &labels, &target.LastSeenAt, &target.CreatedAt, &target.UpdatedAt)
 	target.Type = "container"
-	target.Source = "docker"
-	target.ExternalID = target.ID
-	target.CreatedAt = createdAt
+	if err == nil {
+		err = json.Unmarshal(labels, &target.Labels)
+	}
 	return target, err
+}
+
+func (s *Store) CreateTarget(ctx context.Context, target domain.Target) (domain.Target, error) {
+	if err := s.UpsertTarget(ctx, target); err != nil {
+		return domain.Target{}, err
+	}
+	return s.GetTarget(ctx, target.ID)
+}
+
+func (s *Store) UpdateTarget(ctx context.Context, id string, target domain.Target) (domain.Target, error) {
+	if err := s.ensureConnected(ctx); err != nil {
+		return domain.Target{}, err
+	}
+	if target.ID == "" {
+		target.ID = id
+	}
+	if target.NodeID == "" {
+		existing, err := s.GetTarget(ctx, id)
+		if err != nil {
+			return domain.Target{}, err
+		}
+		target.NodeID = existing.NodeID
+	}
+	if _, err := s.pool.Exec(ctx, `
+		INSERT INTO nodes (id, name) VALUES ($1, $1)
+		ON CONFLICT (id) DO NOTHING
+	`, target.NodeID); err != nil {
+		return domain.Target{}, err
+	}
+	_, err := s.pool.Exec(ctx, `
+		UPDATE containers
+		SET node_id = $1, name = $2, source = $3, external_id = $4, status = $5, labels = $6, last_seen_at = $7, updated_at = now()
+		WHERE id = $8
+	`, target.NodeID, target.Name, defaultString(target.Source, "docker"), defaultString(target.ExternalID, id), defaultString(target.Status, "UNKNOWN"), jsonMap(target.Labels), defaultTime(target.LastSeenAt), id)
+	if err != nil {
+		return domain.Target{}, err
+	}
+	return s.GetTarget(ctx, id)
+}
+
+func (s *Store) DeleteTarget(ctx context.Context, id string) error {
+	if err := s.ensureConnected(ctx); err != nil {
+		return err
+	}
+	_, err := s.pool.Exec(ctx, `DELETE FROM containers WHERE id = $1`, id)
+	return err
 }
 
 func (s *Store) ListAlertRules(ctx context.Context) ([]domain.AlertRule, error) {
@@ -209,7 +261,7 @@ func (s *Store) ListAlertRules(ctx context.Context) ([]domain.AlertRule, error) 
 		return nil, err
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, name, metric, operator, threshold, severity, enabled, recovery_action
+		SELECT id, name, target_id, metric, operator, threshold, duration, severity, enabled, recovery_action
 		FROM alert_rules
 		ORDER BY name
 	`)
@@ -220,7 +272,7 @@ func (s *Store) ListAlertRules(ctx context.Context) ([]domain.AlertRule, error) 
 	var rules []domain.AlertRule
 	for rows.Next() {
 		var rule domain.AlertRule
-		if err := rows.Scan(&rule.ID, &rule.Name, &rule.MetricName, &rule.Operator, &rule.Threshold, &rule.Severity, &rule.Enabled, &rule.RecoveryAction); err != nil {
+		if err := rows.Scan(&rule.ID, &rule.Name, &rule.TargetID, &rule.MetricName, &rule.Operator, &rule.Threshold, &rule.Duration, &rule.Severity, &rule.Enabled, &rule.RecoveryAction); err != nil {
 			return nil, err
 		}
 		rules = append(rules, rule)
@@ -233,10 +285,38 @@ func (s *Store) CreateAlertRule(ctx context.Context, rule domain.AlertRule) (dom
 		return domain.AlertRule{}, err
 	}
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO alert_rules (id, name, metric, operator, threshold, severity, enabled, recovery_action)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, rule.ID, rule.Name, rule.MetricName, rule.Operator, rule.Threshold, rule.Severity, rule.Enabled, rule.RecoveryAction)
-	return rule, err
+		INSERT INTO alert_rules (id, name, target_id, metric, operator, threshold, duration, severity, enabled, recovery_action, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+	`, rule.ID, rule.Name, nullEmpty(rule.TargetID), rule.MetricName, rule.Operator, rule.Threshold, rule.Duration, rule.Severity, rule.Enabled, rule.RecoveryAction)
+	if err != nil {
+		return domain.AlertRule{}, err
+	}
+	return rule, nil
+}
+
+func (s *Store) UpdateAlertRule(ctx context.Context, id string, rule domain.AlertRule) (domain.AlertRule, error) {
+	if err := s.ensureConnected(ctx); err != nil {
+		return domain.AlertRule{}, err
+	}
+	rule.ID = id
+	_, err := s.pool.Exec(ctx, `
+		UPDATE alert_rules
+		SET name = $1, target_id = $2, metric = $3, operator = $4, threshold = $5, duration = $6,
+			severity = $7, enabled = $8, recovery_action = $9, updated_at = now()
+		WHERE id = $10
+	`, rule.Name, nullEmpty(rule.TargetID), rule.MetricName, rule.Operator, rule.Threshold, rule.Duration, rule.Severity, rule.Enabled, rule.RecoveryAction, id)
+	if err != nil {
+		return domain.AlertRule{}, err
+	}
+	return rule, nil
+}
+
+func (s *Store) DeleteAlertRule(ctx context.Context, id string) error {
+	if err := s.ensureConnected(ctx); err != nil {
+		return err
+	}
+	_, err := s.pool.Exec(ctx, `DELETE FROM alert_rules WHERE id = $1`, id)
+	return err
 }
 
 func (s *Store) ListIncidents(ctx context.Context) ([]domain.Incident, error) {
@@ -262,6 +342,19 @@ func (s *Store) ListIncidents(ctx context.Context) ([]domain.Incident, error) {
 		incidents = append(incidents, incident)
 	}
 	return incidents, rows.Err()
+}
+
+func (s *Store) GetIncident(ctx context.Context, id int64) (domain.Incident, error) {
+	if err := s.ensureConnected(ctx); err != nil {
+		return domain.Incident{}, err
+	}
+	var incident domain.Incident
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, rule_id, container_id, node_id, status, severity, description, value, started_at, resolved_at
+		FROM incidents
+		WHERE id = $1
+	`, id).Scan(&incident.ID, &incident.RuleID, &incident.TargetID, &incident.NodeID, &incident.Status, &incident.Severity, &incident.Description, &incident.Value, &incident.StartedAt, &incident.ResolvedAt)
+	return incident, err
 }
 
 func (s *Store) AcknowledgeIncident(ctx context.Context, id int64) error {
@@ -338,4 +431,53 @@ func (s *Store) ensureConnected(ctx context.Context) error {
 		return nil
 	}
 	return s.Connect(ctx)
+}
+
+func defaultString(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+func defaultTime(value time.Time) time.Time {
+	if value.IsZero() {
+		return time.Now().UTC()
+	}
+	return value
+}
+
+func jsonMap(value map[string]any) []byte {
+	if value == nil {
+		value = map[string]any{}
+	}
+	data, _ := json.Marshal(value)
+	return data
+}
+
+func nullEmpty(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func (s *Store) ensureFrontendSchema(ctx context.Context) error {
+	_, err := s.pool.Exec(ctx, `
+		ALTER TABLE containers
+			ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'docker',
+			ADD COLUMN IF NOT EXISTS external_id TEXT NOT NULL DEFAULT '',
+			ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'UNKNOWN',
+			ADD COLUMN IF NOT EXISTS labels JSONB NOT NULL DEFAULT '{}'::jsonb,
+			ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+			ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+		UPDATE containers SET external_id = id WHERE external_id = '';
+
+		ALTER TABLE alert_rules
+			ADD COLUMN IF NOT EXISTS target_id TEXT,
+			ADD COLUMN IF NOT EXISTS duration INTERVAL NOT NULL DEFAULT '0 seconds',
+			ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+	`)
+	return err
 }

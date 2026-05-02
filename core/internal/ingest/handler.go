@@ -151,6 +151,8 @@ func targetFromMetric(metric domain.MetricSample) domain.Target {
 		Source:     metric.Source,
 		ExternalID: metric.TargetID,
 		NodeID:     metric.NodeID,
+		Status:     "OK",
+		LastSeenAt: metric.Timestamp,
 	}
 }
 
@@ -162,6 +164,25 @@ func targetFromEvent(event domain.Event) domain.Target {
 		Source:     event.Source,
 		ExternalID: event.TargetID,
 		NodeID:     event.NodeID,
+		Status:     targetStatusForEvent(event),
+		LastSeenAt: event.Timestamp,
+	}
+}
+
+func targetStatusForEvent(event domain.Event) string {
+	switch event.EventType {
+	case "container_started", "container_restarted":
+		return "OK"
+	case "container_stopped", "container_died", "container_oom":
+		return "CRITICAL"
+	}
+	switch event.Severity {
+	case "critical":
+		return "CRITICAL"
+	case "warning":
+		return "WARNING"
+	default:
+		return "UNKNOWN"
 	}
 }
 

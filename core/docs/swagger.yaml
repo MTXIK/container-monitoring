@@ -2,7 +2,8 @@ basePath: /
 definitions:
   domain.AlertRule:
     properties:
-      condition_operator:
+      duration:
+        example: 2m
         type: string
       enabled:
         type: boolean
@@ -12,9 +13,13 @@ definitions:
         type: string
       name:
         type: string
-      recovery_action:
+      operator:
+        type: string
+      recovery_policy:
         type: string
       severity:
+        type: string
+      target_id:
         type: string
       threshold:
         type: number
@@ -136,11 +141,15 @@ definitions:
       labels:
         additionalProperties: {}
         type: object
+      last_seen_at:
+        type: string
       name:
         type: string
       node_id:
         type: string
       source:
+        type: string
+      status:
         type: string
       type:
         type: string
@@ -191,8 +200,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a threshold alert rule. Missing id, operator, severity,
-        recovery_action, and enabled fields are defaulted by the API.
+      description: Creates a threshold alert rule. Missing id, operator, duration,
+        severity, recovery_policy, and enabled fields are defaulted by the API.
       parameters:
       - description: Alert rule
         in: body
@@ -216,6 +225,59 @@ paths:
           schema:
             $ref: '#/definitions/http.statusResponse'
       summary: Create alert rule
+      tags:
+      - alert-rules
+  /api/v1/alert-rules/{id}:
+    delete:
+      description: Deletes a threshold alert rule.
+      parameters:
+      - description: Alert rule ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+      summary: Delete alert rule
+      tags:
+      - alert-rules
+    patch:
+      consumes:
+      - application/json
+      description: Updates a threshold alert rule.
+      parameters:
+      - description: Alert rule ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Alert rule
+        in: body
+        name: rule
+        required: true
+        schema:
+          $ref: '#/definitions/domain.AlertRule'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.AlertRule'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+      summary: Update alert rule
       tags:
       - alert-rules
   /api/v1/events:
@@ -263,6 +325,33 @@ paths:
           schema:
             $ref: '#/definitions/http.statusResponse'
       summary: List incidents
+      tags:
+      - incidents
+  /api/v1/incidents/{id}:
+    get:
+      description: Returns one incident by ID.
+      parameters:
+      - description: Incident ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Incident'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+      summary: Get incident
       tags:
       - incidents
   /api/v1/incidents/{id}/ack:
@@ -444,7 +533,54 @@ paths:
       summary: List targets
       tags:
       - targets
+    post:
+      consumes:
+      - application/json
+      description: Creates or registers a monitored container target.
+      parameters:
+      - description: Target
+        in: body
+        name: target
+        required: true
+        schema:
+          $ref: '#/definitions/domain.Target'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.Target'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+      summary: Create target
+      tags:
+      - targets
   /api/v1/targets/{id}:
+    delete:
+      description: Deletes a target record from the configuration store.
+      parameters:
+      - description: Target ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+      summary: Delete target
+      tags:
+      - targets
     get:
       description: Returns one discovered Docker container target.
       parameters:
@@ -465,6 +601,40 @@ paths:
           schema:
             $ref: '#/definitions/http.statusResponse'
       summary: Get target
+      tags:
+      - targets
+    patch:
+      consumes:
+      - application/json
+      description: Updates target metadata used by the admin panel.
+      parameters:
+      - description: Target ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Target
+        in: body
+        name: target
+        required: true
+        schema:
+          $ref: '#/definitions/domain.Target'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Target'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+      summary: Update target
       tags:
       - targets
   /api/v1/targets/{id}/events:

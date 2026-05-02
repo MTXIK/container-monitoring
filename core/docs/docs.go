@@ -44,7 +44,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Creates a threshold alert rule. Missing id, operator, severity, recovery_action, and enabled fields are defaulted by the API.",
+                "description": "Creates a threshold alert rule. Missing id, operator, duration, severity, recovery_policy, and enabled fields are defaulted by the API.",
                 "consumes": [
                     "application/json"
                 ],
@@ -69,6 +69,86 @@ const docTemplate = `{
                 "responses": {
                     "201": {
                         "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.AlertRule"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/alert-rules/{id}": {
+            "delete": {
+                "description": "Deletes a threshold alert rule.",
+                "tags": [
+                    "alert-rules"
+                ],
+                "summary": "Delete alert rule",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Alert rule ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Updates a threshold alert rule.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alert-rules"
+                ],
+                "summary": "Update alert rule",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Alert rule ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Alert rule",
+                        "name": "rule",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.AlertRule"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/domain.AlertRule"
                         }
@@ -153,6 +233,47 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/incidents/{id}": {
+            "get": {
+                "description": "Returns one incident by ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "incidents"
+                ],
+                "summary": "Get incident",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Incident ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Incident"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/http.statusResponse"
                         }
@@ -431,6 +552,50 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "post": {
+                "description": "Creates or registers a monitored container target.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "targets"
+                ],
+                "summary": "Create target",
+                "parameters": [
+                    {
+                        "description": "Target",
+                        "name": "target",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.Target"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Target"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
             }
         },
         "/api/v1/targets/{id}": {
@@ -461,6 +626,84 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Deletes a target record from the configuration store.",
+                "tags": [
+                    "targets"
+                ],
+                "summary": "Delete target",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Target ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Updates target metadata used by the admin panel.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "targets"
+                ],
+                "summary": "Update target",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Target ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Target",
+                        "name": "target",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.Target"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Target"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
                         "schema": {
                             "$ref": "#/definitions/http.statusResponse"
                         }
@@ -619,8 +862,9 @@ const docTemplate = `{
         "domain.AlertRule": {
             "type": "object",
             "properties": {
-                "condition_operator": {
-                    "type": "string"
+                "duration": {
+                    "type": "string",
+                    "example": "2m"
                 },
                 "enabled": {
                     "type": "boolean"
@@ -634,10 +878,16 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "recovery_action": {
+                "operator": {
+                    "type": "string"
+                },
+                "recovery_policy": {
                     "type": "string"
                 },
                 "severity": {
+                    "type": "string"
+                },
+                "target_id": {
                     "type": "string"
                 },
                 "threshold": {
@@ -822,6 +1072,9 @@ const docTemplate = `{
                     "type": "object",
                     "additionalProperties": {}
                 },
+                "last_seen_at": {
+                    "type": "string"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -829,6 +1082,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "source": {
+                    "type": "string"
+                },
+                "status": {
                     "type": "string"
                 },
                 "type": {

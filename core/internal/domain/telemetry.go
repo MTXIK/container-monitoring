@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Target struct {
 	ID         string         `json:"id"`
@@ -8,8 +11,10 @@ type Target struct {
 	Type       string         `json:"type"`
 	Source     string         `json:"source"`
 	ExternalID string         `json:"external_id"`
+	Status     string         `json:"status,omitempty"`
 	NodeID     string         `json:"node_id"`
 	Labels     map[string]any `json:"labels,omitempty"`
+	LastSeenAt time.Time      `json:"last_seen_at,omitempty"`
 	CreatedAt  time.Time      `json:"created_at,omitempty"`
 	UpdatedAt  time.Time      `json:"updated_at,omitempty"`
 }
@@ -62,13 +67,41 @@ type Event struct {
 type AlertRule struct {
 	ID             string        `json:"id"`
 	Name           string        `json:"name"`
+	TargetID       string        `json:"target_id,omitempty"`
 	MetricName     string        `json:"metric_name"`
-	Operator       string        `json:"condition_operator"`
+	Operator       string        `json:"operator"`
 	Threshold      float64       `json:"threshold"`
-	Duration       time.Duration `json:"duration" swaggerignore:"true"`
+	Duration       time.Duration `json:"duration" swaggertype:"string" example:"2m"`
 	Severity       string        `json:"severity"`
 	Enabled        bool          `json:"enabled"`
-	RecoveryAction string        `json:"recovery_action"`
+	RecoveryAction string        `json:"recovery_policy"`
+}
+
+func (r AlertRule) MarshalJSON() ([]byte, error) {
+	type alertRule struct {
+		ID             string  `json:"id"`
+		Name           string  `json:"name"`
+		TargetID       string  `json:"target_id,omitempty"`
+		MetricName     string  `json:"metric_name"`
+		Operator       string  `json:"operator"`
+		Threshold      float64 `json:"threshold"`
+		Duration       string  `json:"duration"`
+		Severity       string  `json:"severity"`
+		Enabled        bool    `json:"enabled"`
+		RecoveryAction string  `json:"recovery_policy"`
+	}
+	return json.Marshal(alertRule{
+		ID:             r.ID,
+		Name:           r.Name,
+		TargetID:       r.TargetID,
+		MetricName:     r.MetricName,
+		Operator:       r.Operator,
+		Threshold:      r.Threshold,
+		Duration:       r.Duration.String(),
+		Severity:       r.Severity,
+		Enabled:        r.Enabled,
+		RecoveryAction: r.RecoveryAction,
+	})
 }
 
 type Incident struct {

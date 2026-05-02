@@ -38,4 +38,4 @@ npm run preview
 
 ## Notes
 
-The current backend supports list/create for alert rules, but update/delete endpoints are not implemented yet. The frontend keeps those UI actions present and reports backend limitations through toast messages.
+The backend now exposes the admin-panel endpoints used by the frontend, including target CRUD, alert rule CRUD, incident details, incident acknowledge/resolve, recovery retries, latest metrics, metric history, and events.

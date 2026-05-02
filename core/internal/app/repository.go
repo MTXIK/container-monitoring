@@ -62,6 +62,18 @@ func (r *Repository) GetTarget(ctx context.Context, id string) (domain.Target, e
 	return r.Postgres.GetTarget(ctx, id)
 }
 
+func (r *Repository) CreateTarget(ctx context.Context, target domain.Target) (domain.Target, error) {
+	return r.Postgres.CreateTarget(ctx, target)
+}
+
+func (r *Repository) UpdateTarget(ctx context.Context, id string, target domain.Target) (domain.Target, error) {
+	return r.Postgres.UpdateTarget(ctx, id, target)
+}
+
+func (r *Repository) DeleteTarget(ctx context.Context, id string) error {
+	return r.Postgres.DeleteTarget(ctx, id)
+}
+
 func (r *Repository) ListAlertRules(ctx context.Context) ([]domain.AlertRule, error) {
 	return r.Postgres.ListAlertRules(ctx)
 }
@@ -70,8 +82,20 @@ func (r *Repository) CreateAlertRule(ctx context.Context, rule domain.AlertRule)
 	return r.Postgres.CreateAlertRule(ctx, rule)
 }
 
+func (r *Repository) UpdateAlertRule(ctx context.Context, id string, rule domain.AlertRule) (domain.AlertRule, error) {
+	return r.Postgres.UpdateAlertRule(ctx, id, rule)
+}
+
+func (r *Repository) DeleteAlertRule(ctx context.Context, id string) error {
+	return r.Postgres.DeleteAlertRule(ctx, id)
+}
+
 func (r *Repository) ListIncidents(ctx context.Context) ([]domain.Incident, error) {
 	return r.Postgres.ListIncidents(ctx)
+}
+
+func (r *Repository) GetIncident(ctx context.Context, id int64) (domain.Incident, error) {
+	return r.Postgres.GetIncident(ctx, id)
 }
 
 func (r *Repository) AcknowledgeIncident(ctx context.Context, id int64) error {

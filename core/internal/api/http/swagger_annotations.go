@@ -55,6 +55,43 @@ func swaggerListTargets() {}
 // @Router /api/v1/targets/{id} [get]
 func swaggerGetTarget() {}
 
+// createTarget godoc
+// @Summary Create target
+// @Description Creates or registers a monitored container target.
+// @Tags targets
+// @Accept json
+// @Produce json
+// @Param target body domain.Target true "Target"
+// @Success 201 {object} domain.Target
+// @Failure 400 {object} statusResponse
+// @Failure 500 {object} statusResponse
+// @Router /api/v1/targets [post]
+func swaggerCreateTarget() {}
+
+// updateTarget godoc
+// @Summary Update target
+// @Description Updates target metadata used by the admin panel.
+// @Tags targets
+// @Accept json
+// @Produce json
+// @Param id path string true "Target ID"
+// @Param target body domain.Target true "Target"
+// @Success 200 {object} domain.Target
+// @Failure 400 {object} statusResponse
+// @Failure 500 {object} statusResponse
+// @Router /api/v1/targets/{id} [patch]
+func swaggerUpdateTarget() {}
+
+// deleteTarget godoc
+// @Summary Delete target
+// @Description Deletes a target record from the configuration store.
+// @Tags targets
+// @Param id path string true "Target ID"
+// @Success 204
+// @Failure 500 {object} statusResponse
+// @Router /api/v1/targets/{id} [delete]
+func swaggerDeleteTarget() {}
+
 // latestMetrics godoc
 // @Summary Latest metrics
 // @Description Returns recent metric snapshots from ClickHouse.
@@ -135,7 +172,7 @@ func swaggerListAlertRules() {}
 
 // createAlertRule godoc
 // @Summary Create alert rule
-// @Description Creates a threshold alert rule. Missing id, operator, severity, recovery_action, and enabled fields are defaulted by the API.
+// @Description Creates a threshold alert rule. Missing id, operator, duration, severity, recovery_policy, and enabled fields are defaulted by the API.
 // @Tags alert-rules
 // @Accept json
 // @Produce json
@@ -146,6 +183,30 @@ func swaggerListAlertRules() {}
 // @Router /api/v1/alert-rules [post]
 func swaggerCreateAlertRule() {}
 
+// updateAlertRule godoc
+// @Summary Update alert rule
+// @Description Updates a threshold alert rule.
+// @Tags alert-rules
+// @Accept json
+// @Produce json
+// @Param id path string true "Alert rule ID"
+// @Param rule body domain.AlertRule true "Alert rule"
+// @Success 200 {object} domain.AlertRule
+// @Failure 400 {object} statusResponse
+// @Failure 500 {object} statusResponse
+// @Router /api/v1/alert-rules/{id} [patch]
+func swaggerUpdateAlertRule() {}
+
+// deleteAlertRule godoc
+// @Summary Delete alert rule
+// @Description Deletes a threshold alert rule.
+// @Tags alert-rules
+// @Param id path string true "Alert rule ID"
+// @Success 204
+// @Failure 500 {object} statusResponse
+// @Router /api/v1/alert-rules/{id} [delete]
+func swaggerDeleteAlertRule() {}
+
 // listIncidents godoc
 // @Summary List incidents
 // @Description Returns recent incidents ordered by start time.
@@ -155,6 +216,18 @@ func swaggerCreateAlertRule() {}
 // @Failure 500 {object} statusResponse
 // @Router /api/v1/incidents [get]
 func swaggerListIncidents() {}
+
+// getIncident godoc
+// @Summary Get incident
+// @Description Returns one incident by ID.
+// @Tags incidents
+// @Produce json
+// @Param id path int true "Incident ID"
+// @Success 200 {object} domain.Incident
+// @Failure 400 {object} statusResponse
+// @Failure 404 {object} statusResponse
+// @Router /api/v1/incidents/{id} [get]
+func swaggerGetIncident() {}
 
 // acknowledgeIncident godoc
 // @Summary Acknowledge incident

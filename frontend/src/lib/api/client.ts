@@ -120,8 +120,10 @@ export const api = {
     return data.map(mapIncident);
   },
   async incident(id: string): Promise<Incident | undefined> {
-    const list = await api.incidents();
-    return list.find((item) => item.id === id);
+    const data = await request<unknown>(`/api/v1/incidents/${id}`, {
+      fallback: mockIncidents.find((item) => item.id === id),
+    });
+    return data ? mapIncident(data) : undefined;
   },
   async acknowledgeIncident(id: string): Promise<void> {
     await request<void>(`/api/v1/incidents/${id}/ack`, { method: "POST", fallback: undefined });
