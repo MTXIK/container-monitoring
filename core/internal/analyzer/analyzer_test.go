@@ -8,10 +8,10 @@ import (
 func TestEvaluateCreatesIncidentForMatchingThreshold(t *testing.T) {
 	collectedAt := time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC)
 	metric := Metric{
-		NodeID:      "node-a",
-		ContainerID: "container-a",
-		CPUPercent:  95.5,
-		CollectedAt: collectedAt,
+		NodeID:    "node-a",
+		TargetID:  "container-a",
+		Values:    map[string]float64{"cpu_usage_percent": 95.5},
+		Timestamp: collectedAt,
 	}
 	rules := []ThresholdRule{{
 		ID:        "high-cpu",
@@ -28,13 +28,16 @@ func TestEvaluateCreatesIncidentForMatchingThreshold(t *testing.T) {
 	if incidents[0].RuleID != "high-cpu" {
 		t.Fatalf("RuleID = %q, want high-cpu", incidents[0].RuleID)
 	}
+	if incidents[0].TargetID != "container-a" {
+		t.Fatalf("TargetID = %q, want container-a", incidents[0].TargetID)
+	}
 	if incidents[0].StartedAt != collectedAt {
 		t.Fatalf("StartedAt = %s, want %s", incidents[0].StartedAt, collectedAt)
 	}
 }
 
 func TestEvaluateIgnoresNonMatchingThreshold(t *testing.T) {
-	metric := Metric{CPUPercent: 40}
+	metric := Metric{Values: map[string]float64{"cpu_usage_percent": 40}}
 	rules := []ThresholdRule{{
 		ID:        "high-cpu",
 		Metric:    MetricCPUPercent,

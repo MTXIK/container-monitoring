@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     metric TEXT NOT NULL,
     operator TEXT NOT NULL,
     threshold DOUBLE PRECISION NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'warning',
     recovery_action TEXT NOT NULL DEFAULT 'notify_only',
     enabled BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -29,16 +30,31 @@ CREATE TABLE IF NOT EXISTS incidents (
     node_id TEXT NOT NULL,
     container_id TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'open',
+    severity TEXT NOT NULL DEFAULT 'warning',
+    description TEXT NOT NULL DEFAULT '',
     value DOUBLE PRECISION NOT NULL,
     started_at TIMESTAMPTZ NOT NULL,
     resolved_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS events (
+    id BIGSERIAL PRIMARY KEY,
+    node_id TEXT NOT NULL,
+    container_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    message TEXT NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    occurred_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS recovery_actions (
     id BIGSERIAL PRIMARY KEY,
     incident_id BIGINT NOT NULL REFERENCES incidents(id),
+    target_id TEXT NOT NULL DEFAULT '',
     action TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending',
+    result_message TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     finished_at TIMESTAMPTZ
 );

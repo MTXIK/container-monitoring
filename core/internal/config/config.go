@@ -11,6 +11,7 @@ type Config struct {
 	Postgres   string
 	ClickHouse string
 	RedisAddr  string
+	DockerHost string
 	Telegram   TelegramConfig
 }
 
@@ -18,6 +19,7 @@ type KafkaConfig struct {
 	Brokers      []string
 	MetricsTopic string
 	EventsTopic  string
+	GroupID      string
 }
 
 type TelegramConfig struct {
@@ -32,10 +34,12 @@ func Load() Config {
 			Brokers:      splitEnv("KAFKA_BROKERS", "localhost:9092"),
 			MetricsTopic: env("KAFKA_METRICS_TOPIC", "container.metrics"),
 			EventsTopic:  env("KAFKA_EVENTS_TOPIC", "container.events"),
+			GroupID:      env("KAFKA_GROUP_ID", "container-monitoring-core"),
 		},
 		Postgres:   env("POSTGRES_DSN", "postgres://container_monitoring:container_monitoring@localhost:5432/container_monitoring?sslmode=disable"),
 		ClickHouse: env("CLICKHOUSE_DSN", "http://localhost:8123"),
 		RedisAddr:  env("REDIS_ADDR", "localhost:6379"),
+		DockerHost: env("RECOVERY_DOCKER_HOST", ""),
 		Telegram: TelegramConfig{
 			BotToken: env("TELEGRAM_BOT_TOKEN", ""),
 			ChatID:   env("TELEGRAM_CHAT_ID", ""),

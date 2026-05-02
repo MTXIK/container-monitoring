@@ -3,11 +3,10 @@ package analyzer
 import "time"
 
 type Metric struct {
-	NodeID      string
-	ContainerID string
-	CPUPercent  float64
-	MemoryBytes uint64
-	CollectedAt time.Time
+	NodeID    string
+	TargetID  string
+	Values    map[string]float64
+	Timestamp time.Time
 }
 
 type ThresholdRule struct {
@@ -15,14 +14,23 @@ type ThresholdRule struct {
 	Metric         MetricName
 	Operator       Operator
 	Threshold      float64
+	Severity       string
 	RecoveryAction string
 }
 
 type MetricName string
 
 const (
-	MetricCPUPercent  MetricName = "cpu_percent"
-	MetricMemoryBytes MetricName = "memory_bytes"
+	MetricCPUUsagePercent    MetricName = "cpu_usage_percent"
+	MetricMemoryUsageBytes   MetricName = "memory_usage_bytes"
+	MetricMemoryUsagePercent MetricName = "memory_usage_percent"
+	MetricNetworkRxBytes     MetricName = "network_rx_bytes"
+	MetricNetworkTxBytes     MetricName = "network_tx_bytes"
+	MetricBlockReadBytes     MetricName = "block_read_bytes"
+	MetricBlockWriteBytes    MetricName = "block_write_bytes"
+
+	MetricCPUPercent  MetricName = MetricCPUUsagePercent
+	MetricMemoryBytes MetricName = MetricMemoryUsageBytes
 )
 
 type Operator string
@@ -33,11 +41,14 @@ const (
 )
 
 type Incident struct {
-	RuleID      string
-	NodeID      string
-	ContainerID string
-	Value       float64
-	StartedAt   time.Time
+	RuleID         string
+	NodeID         string
+	TargetID       string
+	MetricName     string
+	Value          float64
+	Severity       string
+	RecoveryAction string
+	StartedAt      time.Time
 }
 
 func Evaluate(metric Metric, rules []ThresholdRule) []Incident {
@@ -48,25 +59,22 @@ func Evaluate(metric Metric, rules []ThresholdRule) []Incident {
 			continue
 		}
 		incidents = append(incidents, Incident{
-			RuleID:      rule.ID,
-			NodeID:      metric.NodeID,
-			ContainerID: metric.ContainerID,
-			Value:       value,
-			StartedAt:   metric.CollectedAt,
+			RuleID:         rule.ID,
+			NodeID:         metric.NodeID,
+			TargetID:       metric.TargetID,
+			MetricName:     string(rule.Metric),
+			Value:          value,
+			Severity:       rule.Severity,
+			RecoveryAction: rule.RecoveryAction,
+			StartedAt:      metric.Timestamp,
 		})
 	}
 	return incidents
 }
 
 func metricValue(metric Metric, name MetricName) (float64, bool) {
-	switch name {
-	case MetricCPUPercent:
-		return metric.CPUPercent, true
-	case MetricMemoryBytes:
-		return float64(metric.MemoryBytes), true
-	default:
-		return 0, false
-	}
+	value, ok := metric.Values[string(name)]
+	return value, ok
 }
 
 func matches(value float64, operator Operator, threshold float64) bool {
