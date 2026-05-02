@@ -40,7 +40,11 @@ func Run(ctx context.Context, logger *slog.Logger, cfg config.Config, backend co
 				logger.Error("publish event", "error", err)
 			}
 		case err, ok := <-eventErrs:
-			if ok && err != nil {
+			if !ok {
+				eventErrs = nil
+				continue
+			}
+			if err != nil {
 				logger.Error("watch docker events", "error", err)
 			}
 		}
