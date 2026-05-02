@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"strconv"
 
+	swaggo "github.com/gofiber/contrib/v3/swaggo"
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
+	_ "github.com/nikponomarevan/container-monitoring-core/docs"
 	"github.com/nikponomarevan/container-monitoring-core/internal/domain"
 )
 
@@ -23,6 +25,8 @@ type Repository interface {
 
 func NewServer(repo Repository) *fiber.App {
 	app := fiber.New(fiber.Config{AppName: "container-monitoring-core"})
+
+	app.Get("/swagger/*", swaggo.HandlerDefault)
 
 	app.Get("/health", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{"status": "ok"})

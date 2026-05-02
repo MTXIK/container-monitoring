@@ -19,6 +19,11 @@ import (
 	"github.com/nikponomarevan/container-monitoring-core/internal/storage/postgres"
 )
 
+// @title Container Monitoring API
+// @version 0.1.0
+// @description MVP API for Docker container monitoring, alerting, incidents, and recovery actions.
+// @BasePath /
+// @schemes http
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	cfg := config.Load()

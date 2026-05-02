@@ -1,4 +1,4 @@
-.PHONY: test build core-up core-down
+.PHONY: test build swagger core-up core-down
 
 test:
 	cd agent && go test ./...
@@ -7,6 +7,9 @@ test:
 build:
 	cd agent && go build ./...
 	cd core && go build ./...
+
+swagger:
+	cd core && go run github.com/swaggo/swag/cmd/swag@v1.16.6 init -g cmd/core/main.go -o docs --parseInternal
 
 core-up:
 	cd core && docker compose -f deploy/docker-compose.yml up -d

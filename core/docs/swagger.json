@@ -1,0 +1,630 @@
+{
+    "schemes": [
+        "http"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "MVP API for Docker container monitoring, alerting, incidents, and recovery actions.",
+        "title": "Container Monitoring API",
+        "contact": {},
+        "version": "0.1.0"
+    },
+    "basePath": "/",
+    "paths": {
+        "/api/v1/alert-rules": {
+            "get": {
+                "description": "Returns enabled and disabled threshold alert rules.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alert-rules"
+                ],
+                "summary": "List alert rules",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.AlertRule"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creates a threshold alert rule. Missing id, operator, severity, recovery_action, and enabled fields are defaulted by the API.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "alert-rules"
+                ],
+                "summary": "Create alert rule",
+                "parameters": [
+                    {
+                        "description": "Alert rule",
+                        "name": "rule",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/domain.AlertRule"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.AlertRule"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events": {
+            "get": {
+                "description": "Documents where events are persisted.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Events pointer",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.messageResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/incidents": {
+            "get": {
+                "description": "Returns recent incidents ordered by start time.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "incidents"
+                ],
+                "summary": "List incidents",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.Incident"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/incidents/{id}/ack": {
+            "post": {
+                "description": "Marks an incident as acknowledged.",
+                "tags": [
+                    "incidents"
+                ],
+                "summary": "Acknowledge incident",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Incident ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/incidents/{id}/resolve": {
+            "post": {
+                "description": "Marks an incident as resolved and sets resolved_at.",
+                "tags": [
+                    "incidents"
+                ],
+                "summary": "Resolve incident",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Incident ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/metrics/history": {
+            "get": {
+                "description": "Documents that metric history is read directly from ClickHouse by Grafana.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "metrics"
+                ],
+                "summary": "Metric history pointer",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.messageResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/metrics/latest": {
+            "get": {
+                "description": "Documents where latest metrics snapshots are stored in Redis.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "metrics"
+                ],
+                "summary": "Latest metrics pointer",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.messageResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/recovery-actions": {
+            "get": {
+                "description": "Returns recent recovery action attempts and results.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "recovery"
+                ],
+                "summary": "List recovery actions",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.RecoveryAction"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/recovery-actions/{id}/retry": {
+            "post": {
+                "description": "Accepts a retry request for a recovery action placeholder endpoint.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "recovery"
+                ],
+                "summary": "Retry recovery action",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Recovery action ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.retryRecoveryResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/targets": {
+            "get": {
+                "description": "Returns discovered Docker container targets.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "targets"
+                ],
+                "summary": "List targets",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/domain.Target"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/targets/{id}": {
+            "get": {
+                "description": "Returns one discovered Docker container target.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "targets"
+                ],
+                "summary": "Get target",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Target ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Target"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/targets/{id}/events": {
+            "get": {
+                "description": "Documents target-scoped event access.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "events"
+                ],
+                "summary": "Target events pointer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Target ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.messageResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/targets/{id}/metrics": {
+            "get": {
+                "description": "Documents target-scoped metric history access.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "metrics"
+                ],
+                "summary": "Target metrics pointer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Target ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.messageResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/health": {
+            "get": {
+                "description": "Reports that the HTTP process is alive.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Health check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/ready": {
+            "get": {
+                "description": "Reports that the HTTP process is ready to serve requests.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "health"
+                ],
+                "summary": "Readiness check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.statusResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "domain.AlertRule": {
+            "type": "object",
+            "properties": {
+                "condition_operator": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metric_name": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "recovery_action": {
+                    "type": "string"
+                },
+                "severity": {
+                    "type": "string"
+                },
+                "threshold": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.Incident": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "node_id": {
+                    "type": "string"
+                },
+                "resolved_at": {
+                    "type": "string"
+                },
+                "rule_id": {
+                    "type": "string"
+                },
+                "severity": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "target_id": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "domain.RecoveryAction": {
+            "type": "object",
+            "properties": {
+                "action_type": {
+                    "type": "string"
+                },
+                "finished_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "incident_id": {
+                    "type": "integer"
+                },
+                "result_message": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "target_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.Target": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "external_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "labels": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "node_id": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "http.messageResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "example": "Grafana reads metric history directly from ClickHouse"
+                },
+                "target_id": {
+                    "type": "string",
+                    "example": "container-id"
+                }
+            }
+        },
+        "http.retryRecoveryResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "example": "1"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "retry accepted"
+                }
+            }
+        },
+        "http.statusResponse": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        }
+    }
+}

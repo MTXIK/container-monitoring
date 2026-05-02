@@ -41,7 +41,7 @@ type AlertRule struct {
 	MetricName     string        `json:"metric_name"`
 	Operator       string        `json:"condition_operator"`
 	Threshold      float64       `json:"threshold"`
-	Duration       time.Duration `json:"duration"`
+	Duration       time.Duration `json:"duration" swaggerignore:"true"`
 	Severity       string        `json:"severity"`
 	Enabled        bool          `json:"enabled"`
 	RecoveryAction string        `json:"recovery_action"`
