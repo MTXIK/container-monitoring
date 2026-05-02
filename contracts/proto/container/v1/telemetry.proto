@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package container.v1;
+
+option go_package = "github.com/nikponomarevan/container-monitoring-contracts/gen/go/container/v1;containerv1";
+
+message ContainerMetric {
+  string node_id = 1;
+  string container_id = 2;
+  string name = 3;
+  double cpu_percent = 4;
+  uint64 memory_bytes = 5;
+  uint64 rx_bytes = 6;
+  uint64 tx_bytes = 7;
+  uint64 block_read = 8;
+  uint64 block_write = 9;
+  int64 collected_at_unix_ms = 10;
+}
+
+message ContainerEvent {
+  string node_id = 1;
+  string container_id = 2;
+  string name = 3;
+  ContainerEventType type = 4;
+  int64 occurred_at_unix_ms = 5;
+}
+
+enum ContainerEventType {
+  CONTAINER_EVENT_TYPE_UNSPECIFIED = 0;
+  CONTAINER_EVENT_TYPE_START = 1;
+  CONTAINER_EVENT_TYPE_STOP = 2;
+  CONTAINER_EVENT_TYPE_DIE = 3;
+  CONTAINER_EVENT_TYPE_OOM = 4;
+}
