@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS alert_rules (
 
 CREATE TABLE IF NOT EXISTS incidents (
     id BIGSERIAL PRIMARY KEY,
-    rule_id TEXT NOT NULL REFERENCES alert_rules(id),
+    rule_id TEXT NOT NULL,
     node_id TEXT NOT NULL,
     container_id TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'open',
@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS events (
     id BIGSERIAL PRIMARY KEY,
     node_id TEXT NOT NULL,
     container_id TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
     event_type TEXT NOT NULL,
     severity TEXT NOT NULL,
     message TEXT NOT NULL,

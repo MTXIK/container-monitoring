@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"time"
 
 	"github.com/nikponomarevan/container-monitoring-core/internal/analyzer"
 	"github.com/nikponomarevan/container-monitoring-core/internal/domain"
@@ -22,11 +23,23 @@ func (r *Repository) SaveMetric(ctx context.Context, metric domain.MetricSample)
 	return r.ClickHouse.SaveMetric(ctx, metric)
 }
 
+func (r *Repository) LatestMetrics(ctx context.Context, targetID string, limit int) ([]domain.MetricSnapshot, error) {
+	return r.ClickHouse.LatestMetrics(ctx, targetID, limit)
+}
+
+func (r *Repository) MetricHistory(ctx context.Context, targetID, metricName string, from, to time.Time, limit int) ([]domain.MetricPoint, error) {
+	return r.ClickHouse.MetricHistory(ctx, targetID, metricName, from, to, limit)
+}
+
 func (r *Repository) SaveEvent(ctx context.Context, event domain.Event) error {
 	if err := r.Postgres.SaveEvent(ctx, event); err != nil {
 		return err
 	}
 	return r.ClickHouse.SaveEvent(ctx, event)
+}
+
+func (r *Repository) ListEvents(ctx context.Context, targetID string, limit int) ([]domain.Event, error) {
+	return r.Postgres.ListEvents(ctx, targetID, limit)
 }
 
 func (r *Repository) UpsertTarget(ctx context.Context, target domain.Target) error {

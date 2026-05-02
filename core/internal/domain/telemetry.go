@@ -23,7 +23,31 @@ type MetricSample struct {
 	Timestamp     time.Time          `json:"timestamp"`
 }
 
+type MetricSnapshot struct {
+	NodeID           string    `json:"node_id"`
+	TargetID         string    `json:"target_id"`
+	ContainerName    string    `json:"container_name"`
+	CPUUsagePercent  float64   `json:"cpu_usage_percent"`
+	MemoryUsageBytes uint64    `json:"memory_usage_bytes"`
+	NetworkRxBytes   uint64    `json:"network_rx_bytes"`
+	NetworkTxBytes   uint64    `json:"network_tx_bytes"`
+	BlockReadBytes   uint64    `json:"block_read_bytes"`
+	BlockWriteBytes  uint64    `json:"block_write_bytes"`
+	Timestamp        time.Time `json:"timestamp"`
+}
+
+type MetricPoint struct {
+	NodeID        string    `json:"node_id"`
+	TargetID      string    `json:"target_id"`
+	ContainerName string    `json:"container_name"`
+	MetricName    string    `json:"metric_name"`
+	Value         float64   `json:"value"`
+	Unit          string    `json:"unit"`
+	Timestamp     time.Time `json:"timestamp"`
+}
+
 type Event struct {
+	ID            int64          `json:"id,omitempty"`
 	NodeID        string         `json:"node_id"`
 	Source        string         `json:"source"`
 	TargetID      string         `json:"target_id"`

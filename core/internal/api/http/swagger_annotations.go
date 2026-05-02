@@ -56,20 +56,31 @@ func swaggerListTargets() {}
 func swaggerGetTarget() {}
 
 // latestMetrics godoc
-// @Summary Latest metrics pointer
-// @Description Documents where latest metrics snapshots are stored in Redis.
+// @Summary Latest metrics
+// @Description Returns recent metric snapshots from ClickHouse.
 // @Tags metrics
 // @Produce json
-// @Success 200 {object} messageResponse
+// @Param target_id query string false "Target ID"
+// @Param limit query int false "Maximum rows"
+// @Success 200 {array} domain.MetricSnapshot
+// @Failure 400 {object} statusResponse
+// @Failure 500 {object} statusResponse
 // @Router /api/v1/metrics/latest [get]
 func swaggerLatestMetrics() {}
 
 // metricHistory godoc
-// @Summary Metric history pointer
-// @Description Documents that metric history is read directly from ClickHouse by Grafana.
+// @Summary Metric history
+// @Description Returns metric history points from ClickHouse.
 // @Tags metrics
 // @Produce json
-// @Success 200 {object} messageResponse
+// @Param target_id query string false "Target ID"
+// @Param metric_name query string false "Metric name"
+// @Param from query string false "RFC3339 start time"
+// @Param to query string false "RFC3339 end time"
+// @Param limit query int false "Maximum rows"
+// @Success 200 {array} domain.MetricPoint
+// @Failure 400 {object} statusResponse
+// @Failure 500 {object} statusResponse
 // @Router /api/v1/metrics/history [get]
 func swaggerMetricHistory() {}
 
@@ -79,16 +90,23 @@ func swaggerMetricHistory() {}
 // @Tags metrics
 // @Produce json
 // @Param id path string true "Target ID"
-// @Success 200 {object} messageResponse
+// @Param metric_name query string false "Metric name"
+// @Param limit query int false "Maximum rows"
+// @Success 200 {array} domain.MetricPoint
+// @Failure 400 {object} statusResponse
+// @Failure 500 {object} statusResponse
 // @Router /api/v1/targets/{id}/metrics [get]
 func swaggerTargetMetrics() {}
 
 // listEvents godoc
-// @Summary Events pointer
-// @Description Documents where events are persisted.
+// @Summary List events
+// @Description Returns recent container events from PostgreSQL.
 // @Tags events
 // @Produce json
-// @Success 200 {object} messageResponse
+// @Param limit query int false "Maximum rows"
+// @Success 200 {array} domain.Event
+// @Failure 400 {object} statusResponse
+// @Failure 500 {object} statusResponse
 // @Router /api/v1/events [get]
 func swaggerListEvents() {}
 
@@ -98,7 +116,10 @@ func swaggerListEvents() {}
 // @Tags events
 // @Produce json
 // @Param id path string true "Target ID"
-// @Success 200 {object} messageResponse
+// @Param limit query int false "Maximum rows"
+// @Success 200 {array} domain.Event
+// @Failure 400 {object} statusResponse
+// @Failure 500 {object} statusResponse
 // @Router /api/v1/targets/{id}/events [get]
 func swaggerTargetEvents() {}
 
@@ -179,6 +200,9 @@ func swaggerRetryRecoveryAction() {}
 
 var (
 	_ domain.Target
+	_ domain.MetricSnapshot
+	_ domain.MetricPoint
+	_ domain.Event
 	_ domain.AlertRule
 	_ domain.Incident
 	_ domain.RecoveryAction

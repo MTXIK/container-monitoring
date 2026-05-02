@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -73,10 +74,50 @@ func (s *Store) SaveEvent(ctx context.Context, event domain.Event) error {
 		return err
 	}
 	_, err = s.pool.Exec(ctx, `
-		INSERT INTO events (node_id, container_id, event_type, severity, message, payload, occurred_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-	`, event.NodeID, event.TargetID, event.EventType, event.Severity, event.Message, payload, event.Timestamp)
+		INSERT INTO events (node_id, container_id, name, event_type, severity, message, payload, occurred_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+	`, event.NodeID, event.TargetID, event.ContainerName, event.EventType, event.Severity, event.Message, payload, event.Timestamp)
 	return err
+}
+
+func (s *Store) ListEvents(ctx context.Context, targetID string, limit int) ([]domain.Event, error) {
+	if err := s.ensureConnected(ctx); err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	query := `
+		SELECT id, node_id, container_id, name, event_type, severity, message, payload, occurred_at
+		FROM events
+	`
+	args := []any{}
+	if targetID != "" {
+		query += " WHERE container_id = $1"
+		args = append(args, targetID)
+	}
+	query += " ORDER BY occurred_at DESC LIMIT $" + strconv.Itoa(len(args)+1)
+	args = append(args, limit)
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var events []domain.Event
+	for rows.Next() {
+		var event domain.Event
+		var payload []byte
+		if err := rows.Scan(&event.ID, &event.NodeID, &event.TargetID, &event.ContainerName, &event.EventType, &event.Severity, &event.Message, &payload, &event.Timestamp); err != nil {
+			return nil, err
+		}
+		event.Source = "docker"
+		if err := json.Unmarshal(payload, &event.Payload); err != nil {
+			return nil, err
+		}
+		events = append(events, event)
+	}
+	return events, rows.Err()
 }
 
 func (s *Store) EnabledRules(ctx context.Context) ([]analyzer.ThresholdRule, error) {

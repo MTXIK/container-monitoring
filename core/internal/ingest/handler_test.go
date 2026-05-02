@@ -150,6 +150,12 @@ func TestHandlerProcessesEventMessage(t *testing.T) {
 	if len(state.states) != 1 {
 		t.Fatalf("states = %d, want 1", len(state.states))
 	}
+	if len(store.incidents) != 1 {
+		t.Fatalf("incidents = %d, want 1", len(store.incidents))
+	}
+	if store.incidents[0].RuleID != "container_died" {
+		t.Fatalf("incident RuleID = %q, want container_died", store.incidents[0].RuleID)
+	}
 	if !store.events[0].Timestamp.Equal(time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC)) {
 		t.Fatalf("timestamp = %s", store.events[0].Timestamp)
 	}

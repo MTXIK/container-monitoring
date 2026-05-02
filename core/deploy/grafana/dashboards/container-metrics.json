@@ -1,10 +1,133 @@
 {
-  "title": "Container Metrics",
+  "uid": "container-monitoring-mvp",
+  "title": "Container Monitoring MVP",
   "schemaVersion": 39,
-  "version": 1,
-  "panels": [],
+  "version": 2,
+  "refresh": "10s",
   "time": {
     "from": "now-1h",
     "to": "now"
-  }
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "container",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-clickhouse-datasource",
+          "uid": "ClickHouse"
+        },
+        "query": "SELECT DISTINCT container_id FROM container_metrics ORDER BY container_id",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": "",
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "CPU usage by container",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ClickHouse" },
+          "format": "time_series",
+          "queryType": "sql",
+          "rawSql": "SELECT collected_at AS time, name AS metric, cpu_percent AS value FROM container_metrics WHERE $__timeFilter(collected_at) AND ('$container' = '' OR container_id IN (${container:singlequote})) ORDER BY collected_at"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Memory usage by container",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ClickHouse" },
+          "format": "time_series",
+          "queryType": "sql",
+          "rawSql": "SELECT collected_at AS time, name AS metric, memory_bytes AS value FROM container_metrics WHERE $__timeFilter(collected_at) AND ('$container' = '' OR container_id IN (${container:singlequote})) ORDER BY collected_at"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Container events over time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ClickHouse" },
+          "format": "time_series",
+          "queryType": "sql",
+          "rawSql": "SELECT toStartOfMinute(occurred_at) AS time, type AS metric, count() AS value FROM container_events WHERE $__timeFilter(occurred_at) GROUP BY time, type ORDER BY time"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Incident-like critical events",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ClickHouse" },
+          "format": "table",
+          "queryType": "sql",
+          "rawSql": "SELECT count() AS critical_events FROM container_events WHERE $__timeFilter(occurred_at) AND type IN ('container_died', 'container_oom')"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Latest container events",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ClickHouse" },
+          "format": "table",
+          "queryType": "sql",
+          "rawSql": "SELECT occurred_at, node_id, name, container_id, type FROM container_events ORDER BY occurred_at DESC LIMIT 50"
+        }
+      ]
+    }
+  ]
 }

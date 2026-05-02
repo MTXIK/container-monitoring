@@ -136,9 +136,11 @@ func (h *Handler) handleEvent(ctx context.Context, value []byte) error {
 		return err
 	}
 	if h.state != nil {
-		return h.state.SetTargetState(ctx, event)
+		if err := h.state.SetTargetState(ctx, event); err != nil {
+			return err
+		}
 	}
-	return nil
+	return h.createIncidentForEvent(ctx, event)
 }
 
 func targetFromMetric(metric domain.MetricSample) domain.Target {
@@ -172,5 +174,54 @@ func formatIncident(metric domain.MetricSample, incident domain.Incident, candid
 		candidate.Value,
 		incident.ID,
 		candidate.RecoveryAction,
+	)
+}
+
+func (h *Handler) createIncidentForEvent(ctx context.Context, event domain.Event) error {
+	action := recoveryActionForEvent(event.EventType)
+	if action == "" {
+		return nil
+	}
+	incident, err := h.store.CreateIncident(ctx, domain.Incident{
+		RuleID:      event.EventType,
+		TargetID:    event.TargetID,
+		NodeID:      event.NodeID,
+		Status:      "open",
+		Severity:    event.Severity,
+		Description: event.Message,
+		Value:       1,
+		StartedAt:   event.Timestamp,
+	})
+	if err != nil {
+		return err
+	}
+	if h.notifier != nil {
+		if err := h.notifier.SendIncident(ctx, formatEventIncident(event, incident, action)); err != nil {
+			return err
+		}
+	}
+	if h.recoverer != nil {
+		return h.recoverer.Recover(ctx, incident, action)
+	}
+	return nil
+}
+
+func recoveryActionForEvent(eventType string) string {
+	switch eventType {
+	case "container_stopped", "container_died", "container_oom":
+		return "restart_container"
+	default:
+		return ""
+	}
+}
+
+func formatEventIncident(event domain.Event, incident domain.Incident, action string) string {
+	return fmt.Sprintf("%s: container %s on %s\nReason: %s\nIncident: %d\nRecovery: %s",
+		incident.Severity,
+		event.ContainerName,
+		event.NodeID,
+		event.EventType,
+		incident.ID,
+		action,
 	)
 }

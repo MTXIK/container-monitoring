@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"time"
 
 	swaggo "github.com/gofiber/contrib/v3/swaggo"
 	"github.com/gofiber/fiber/v3"
@@ -15,6 +16,9 @@ import (
 type Repository interface {
 	ListTargets(ctx context.Context) ([]domain.Target, error)
 	GetTarget(ctx context.Context, id string) (domain.Target, error)
+	LatestMetrics(ctx context.Context, targetID string, limit int) ([]domain.MetricSnapshot, error)
+	MetricHistory(ctx context.Context, targetID, metricName string, from, to time.Time, limit int) ([]domain.MetricPoint, error)
+	ListEvents(ctx context.Context, targetID string, limit int) ([]domain.Event, error)
 	ListAlertRules(ctx context.Context) ([]domain.AlertRule, error)
 	CreateAlertRule(ctx context.Context, rule domain.AlertRule) (domain.AlertRule, error)
 	ListIncidents(ctx context.Context) ([]domain.Incident, error)
@@ -58,19 +62,67 @@ func NewServer(repo Repository) *fiber.App {
 		return c.JSON(target)
 	})
 	api.Get("/metrics/latest", func(c fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "latest metrics are stored in Redis under target:{id}:last_metrics"})
+		limit, err := intQuery(c, "limit", 100)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+		metrics, err := repo.LatestMetrics(c.Context(), c.Query("target_id"), limit)
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(metrics)
 	})
 	api.Get("/metrics/history", func(c fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "Grafana reads metric history directly from ClickHouse"})
+		limit, err := intQuery(c, "limit", 500)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+		from, err := timeQuery(c, "from")
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+		to, err := timeQuery(c, "to")
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+		points, err := repo.MetricHistory(c.Context(), c.Query("target_id"), c.Query("metric_name"), from, to, limit)
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(points)
 	})
 	api.Get("/targets/:id/metrics", func(c fiber.Ctx) error {
-		return c.JSON(fiber.Map{"target_id": c.Params("id"), "status": "Grafana reads metric history directly from ClickHouse"})
+		limit, err := intQuery(c, "limit", 500)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+		points, err := repo.MetricHistory(c.Context(), c.Params("id"), c.Query("metric_name"), time.Time{}, time.Time{}, limit)
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(points)
 	})
 	api.Get("/events", func(c fiber.Ctx) error {
-		return c.JSON(fiber.Map{"status": "events are persisted in PostgreSQL and ClickHouse"})
+		limit, err := intQuery(c, "limit", 100)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+		events, err := repo.ListEvents(c.Context(), "", limit)
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(events)
 	})
 	api.Get("/targets/:id/events", func(c fiber.Ctx) error {
-		return c.JSON(fiber.Map{"target_id": c.Params("id"), "status": "events are persisted in PostgreSQL and ClickHouse"})
+		limit, err := intQuery(c, "limit", 100)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+		events, err := repo.ListEvents(c.Context(), c.Params("id"), limit)
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		}
+		return c.JSON(events)
 	})
 	api.Get("/alert-rules", func(c fiber.Ctx) error {
 		rules, err := repo.ListAlertRules(c.Context())
@@ -142,4 +194,24 @@ func NewServer(repo Repository) *fiber.App {
 	})
 
 	return app
+}
+
+func intQuery(c fiber.Ctx, name string, fallback int) (int, error) {
+	raw := c.Query(name)
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, err
+	}
+	return value, nil
+}
+
+func timeQuery(c fiber.Ctx, name string) (time.Time, error) {
+	raw := c.Query(name)
+	if raw == "" {
+		return time.Time{}, nil
+	}
+	return time.Parse(time.RFC3339Nano, raw)
 }

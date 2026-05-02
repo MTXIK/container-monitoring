@@ -19,6 +19,30 @@ definitions:
       threshold:
         type: number
     type: object
+  domain.Event:
+    properties:
+      container_name:
+        type: string
+      event_type:
+        type: string
+      id:
+        type: integer
+      message:
+        type: string
+      node_id:
+        type: string
+      payload:
+        additionalProperties: {}
+        type: object
+      severity:
+        type: string
+      source:
+        type: string
+      target_id:
+        type: string
+      timestamp:
+        type: string
+    type: object
   domain.Incident:
     properties:
       description:
@@ -41,6 +65,46 @@ definitions:
         type: string
       value:
         type: number
+    type: object
+  domain.MetricPoint:
+    properties:
+      container_name:
+        type: string
+      metric_name:
+        type: string
+      node_id:
+        type: string
+      target_id:
+        type: string
+      timestamp:
+        type: string
+      unit:
+        type: string
+      value:
+        type: number
+    type: object
+  domain.MetricSnapshot:
+    properties:
+      block_read_bytes:
+        type: integer
+      block_write_bytes:
+        type: integer
+      container_name:
+        type: string
+      cpu_usage_percent:
+        type: number
+      memory_usage_bytes:
+        type: integer
+      network_rx_bytes:
+        type: integer
+      network_tx_bytes:
+        type: integer
+      node_id:
+        type: string
+      target_id:
+        type: string
+      timestamp:
+        type: string
     type: object
   domain.RecoveryAction:
     properties:
@@ -81,15 +145,6 @@ definitions:
       type:
         type: string
       updated_at:
-        type: string
-    type: object
-  http.messageResponse:
-    properties:
-      status:
-        example: Grafana reads metric history directly from ClickHouse
-        type: string
-      target_id:
-        example: container-id
         type: string
     type: object
   http.retryRecoveryResponse:
@@ -165,15 +220,30 @@ paths:
       - alert-rules
   /api/v1/events:
     get:
-      description: Documents where events are persisted.
+      description: Returns recent container events from PostgreSQL.
+      parameters:
+      - description: Maximum rows
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.messageResponse'
-      summary: Events pointer
+            items:
+              $ref: '#/definitions/domain.Event'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+      summary: List events
       tags:
       - events
   /api/v1/incidents:
@@ -243,29 +313,78 @@ paths:
       - incidents
   /api/v1/metrics/history:
     get:
-      description: Documents that metric history is read directly from ClickHouse
-        by Grafana.
+      description: Returns metric history points from ClickHouse.
+      parameters:
+      - description: Target ID
+        in: query
+        name: target_id
+        type: string
+      - description: Metric name
+        in: query
+        name: metric_name
+        type: string
+      - description: RFC3339 start time
+        in: query
+        name: from
+        type: string
+      - description: RFC3339 end time
+        in: query
+        name: to
+        type: string
+      - description: Maximum rows
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.messageResponse'
-      summary: Metric history pointer
+            items:
+              $ref: '#/definitions/domain.MetricPoint'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+      summary: Metric history
       tags:
       - metrics
   /api/v1/metrics/latest:
     get:
-      description: Documents where latest metrics snapshots are stored in Redis.
+      description: Returns recent metric snapshots from ClickHouse.
+      parameters:
+      - description: Target ID
+        in: query
+        name: target_id
+        type: string
+      - description: Maximum rows
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.messageResponse'
-      summary: Latest metrics pointer
+            items:
+              $ref: '#/definitions/domain.MetricSnapshot'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+      summary: Latest metrics
       tags:
       - metrics
   /api/v1/recovery-actions:
@@ -357,13 +476,27 @@ paths:
         name: id
         required: true
         type: string
+      - description: Maximum rows
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.messageResponse'
+            items:
+              $ref: '#/definitions/domain.Event'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.statusResponse'
       summary: Target events pointer
       tags:
       - events
@@ -376,13 +509,31 @@ paths:
         name: id
         required: true
         type: string
+      - description: Metric name
+        in: query
+        name: metric_name
+        type: string
+      - description: Maximum rows
+        in: query
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/http.messageResponse'
+            items:
+              $ref: '#/definitions/domain.MetricPoint'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.statusResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/http.statusResponse'
       summary: Target metrics pointer
       tags:
       - metrics
