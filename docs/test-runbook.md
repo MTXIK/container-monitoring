@@ -358,7 +358,7 @@ curl -sS -X POST http://localhost:8080/api/v1/alert-rules \
 
 sleep 8
 curl -sS http://localhost:8080/api/v1/incidents | jq \
-  --arg target "$TARGET_ID" '.[] | select(.target_id == $target and .rule_id | startswith("TC"))'
+  --arg target "$TARGET_ID" '.[] | select(.target_id == $target and (.rule_id | startswith("TC")))'
 ```
 
 Expected result:

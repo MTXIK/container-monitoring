@@ -88,7 +88,7 @@ Event payload example:
 | Variable | Default | Description |
 | --- | --- | --- |
 | `AGENT_NODE_ID` | `local-node` | Logical node id attached to every metric and event. |
-| `AGENT_COLLECTOR_BACKEND` | `docker` | Collector backend name. Docker is the current implementation. |
+| `AGENT_COLLECTOR_BACKEND` | `docker` | Reserved backend selector. The current entrypoint always uses Docker. |
 | `DOCKER_HOST` | `unix:///var/run/docker.sock` | Docker API endpoint. Unix socket is used in local Compose. |
 | `COLLECT_INTERVAL` | `10s` | Periodic stats collection interval. Uses Go duration syntax. |
 | `KAFKA_BROKERS` | `localhost:9092` | Comma-separated Kafka broker list. |
