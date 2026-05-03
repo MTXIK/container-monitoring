@@ -8,6 +8,9 @@ This scenario demonstrates the MVP flow for a Docker container failure:
 4. Stop, die, and OOM events create incidents, send Telegram alerts, and trigger recovery actions.
 5. Grafana shows metrics and container events from ClickHouse.
 
+For the full verification checklist, including automated e2e and manual
+business scenarios, see [`test-runbook.md`](test-runbook.md).
+
 ## Start the Local Stack
 
 ```bash
