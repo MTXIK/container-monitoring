@@ -91,9 +91,8 @@ services:
         condition: service_started
 
   core:
-    image: golang:1.25-alpine
-    working_dir: /workspace/core
-    command: go run ./cmd/core
+    build:
+      context: ./core
     ports:
       - "8080:8080"
     environment:
@@ -108,13 +107,8 @@ services:
       RECOVERY_DOCKER_HOST: unix:///var/run/docker.sock
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
-      GOCACHE: /tmp/go-cache
-      GOMODCACHE: /go/pkg/mod
     volumes:
-      - ./core:/workspace/core
       - /var/run/docker.sock:/var/run/docker.sock
-      - go-mod-cache:/go/pkg/mod
-      - go-build-cache:/tmp/go-cache
     depends_on:
       kafka:
         condition: service_healthy
@@ -126,9 +120,8 @@ services:
         condition: service_healthy
 
   agent:
-    image: golang:1.24-alpine
-    working_dir: /workspace/agent
-    command: go run ./cmd/agent
+    build:
+      context: ./agent
     environment:
       AGENT_NODE_ID: local-node
       AGENT_COLLECTOR_BACKEND: docker
@@ -137,13 +130,8 @@ services:
       KAFKA_BROKERS: kafka:29092
       KAFKA_METRICS_TOPIC: container.metrics
       KAFKA_EVENTS_TOPIC: container.events
-      GOCACHE: /tmp/go-cache
-      GOMODCACHE: /go/pkg/mod
     volumes:
-      - ./agent:/workspace/agent
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - go-mod-cache:/go/pkg/mod
-      - go-build-cache:/tmp/go-cache
     depends_on:
       kafka:
         condition: service_healthy
@@ -161,5 +149,3 @@ volumes:
   postgres-data:
   clickhouse-data:
   grafana-data:
-  go-mod-cache:
-  go-build-cache:
