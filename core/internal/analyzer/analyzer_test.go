@@ -51,3 +51,45 @@ func TestEvaluateIgnoresNonMatchingThreshold(t *testing.T) {
 		t.Fatalf("len(incidents) = %d, want 0", len(incidents))
 	}
 }
+
+func TestEvaluateAppliesTargetFilter(t *testing.T) {
+	metric := Metric{
+		TargetID: "container-a",
+		Values:   map[string]float64{"cpu_usage_percent": 95},
+	}
+	rules := []ThresholdRule{{
+		ID:        "high-cpu",
+		TargetID:  "container-b",
+		Metric:    MetricCPUPercent,
+		Operator:  OperatorGreaterThan,
+		Threshold: 90,
+	}}
+
+	incidents := Evaluate(metric, rules)
+
+	if len(incidents) != 0 {
+		t.Fatalf("len(incidents) = %d, want 0", len(incidents))
+	}
+}
+
+func TestEvaluateSupportsInclusiveAndEqualityOperators(t *testing.T) {
+	metric := Metric{
+		TargetID: "container-a",
+		Values: map[string]float64{
+			"cpu_usage_percent":    90,
+			"memory_usage_percent": 75,
+			"network_rx_bytes":     1024,
+		},
+	}
+	rules := []ThresholdRule{
+		{ID: "gte-cpu", Metric: MetricCPUPercent, Operator: OperatorGreaterThanOrEqual, Threshold: 90},
+		{ID: "lte-memory", Metric: MetricMemoryUsagePercent, Operator: OperatorLessThanOrEqual, Threshold: 75},
+		{ID: "eq-rx", Metric: MetricNetworkRxBytes, Operator: OperatorEqual, Threshold: 1024},
+	}
+
+	incidents := Evaluate(metric, rules)
+
+	if len(incidents) != 3 {
+		t.Fatalf("len(incidents) = %d, want 3", len(incidents))
+	}
+}

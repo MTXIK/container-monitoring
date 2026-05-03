@@ -54,6 +54,10 @@ func (r *Repository) CreateIncident(ctx context.Context, incident domain.Inciden
 	return r.Postgres.CreateIncident(ctx, incident)
 }
 
+func (r *Repository) HasOpenIncident(ctx context.Context, ruleID, targetID string) (bool, error) {
+	return r.Postgres.HasOpenIncident(ctx, ruleID, targetID)
+}
+
 func (r *Repository) ListTargets(ctx context.Context) ([]domain.Target, error) {
 	return r.Postgres.ListTargets(ctx)
 }

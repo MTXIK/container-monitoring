@@ -37,6 +37,15 @@ func (s *recordingStore) EnabledRules(_ context.Context) ([]analyzer.ThresholdRu
 	return s.rules, nil
 }
 
+func (s *recordingStore) HasOpenIncident(_ context.Context, ruleID, targetID string) (bool, error) {
+	for _, incident := range s.incidents {
+		if incident.RuleID == ruleID && incident.TargetID == targetID && incident.Status != "resolved" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (s *recordingStore) CreateIncident(_ context.Context, incident domain.Incident) (domain.Incident, error) {
 	incident.ID = int64(len(s.incidents) + 1)
 	s.incidents = append(s.incidents, incident)
@@ -44,8 +53,9 @@ func (s *recordingStore) CreateIncident(_ context.Context, incident domain.Incid
 }
 
 type recordingState struct {
-	latest domain.MetricSample
-	states []domain.Event
+	latest      domain.MetricSample
+	states      []domain.Event
+	alertStarts map[string]time.Time
 }
 
 func (s *recordingState) SetLatestMetrics(_ context.Context, metric domain.MetricSample) error {
@@ -55,6 +65,25 @@ func (s *recordingState) SetLatestMetrics(_ context.Context, metric domain.Metri
 
 func (s *recordingState) SetTargetState(_ context.Context, event domain.Event) error {
 	s.states = append(s.states, event)
+	return nil
+}
+
+func (s *recordingState) AlertThresholdStartedAt(_ context.Context, ruleID, targetID string, matchedAt time.Time) (time.Time, error) {
+	if s.alertStarts == nil {
+		s.alertStarts = map[string]time.Time{}
+	}
+	key := ruleID + ":" + targetID
+	if startedAt, ok := s.alertStarts[key]; ok {
+		return startedAt, nil
+	}
+	s.alertStarts[key] = matchedAt
+	return matchedAt, nil
+}
+
+func (s *recordingState) ClearAlertThreshold(_ context.Context, ruleID, targetID string) error {
+	if s.alertStarts != nil {
+		delete(s.alertStarts, ruleID+":"+targetID)
+	}
 	return nil
 }
 
@@ -161,5 +190,113 @@ func TestHandlerProcessesEventMessage(t *testing.T) {
 	}
 	if !store.events[0].Timestamp.Equal(time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC)) {
 		t.Fatalf("timestamp = %s", store.events[0].Timestamp)
+	}
+}
+
+func TestMetricTargetDoesNotOverwriteLifecycleStatus(t *testing.T) {
+	metric := domain.MetricSample{
+		NodeID:        "node-1",
+		Source:        "docker",
+		TargetID:      "container-id",
+		ContainerName: "nginx",
+		Timestamp:     time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC),
+	}
+
+	target := targetFromMetric(metric)
+
+	if target.Status != "" {
+		t.Fatalf("metric target status = %q, want empty status update", target.Status)
+	}
+}
+
+func TestHandlerWaitsForAlertDurationBeforeCreatingIncident(t *testing.T) {
+	store := &recordingStore{rules: []analyzer.ThresholdRule{{
+		ID:        "sustained-cpu",
+		TargetID:  "container-id",
+		Metric:    analyzer.MetricCPUUsagePercent,
+		Operator:  analyzer.OperatorGreaterThanOrEqual,
+		Threshold: 80,
+		Duration:  2 * time.Minute,
+		Severity:  "critical",
+	}}}
+	state := &recordingState{}
+	handler := NewHandler(Config{
+		MetricsTopic: "container.metrics",
+		EventsTopic:  "container.events",
+	}, store, state, nil)
+
+	first := []byte(`{
+		"node_id":"node-1",
+		"source":"docker",
+		"target_id":"container-id",
+		"container_name":"nginx",
+		"metrics":{"cpu_usage_percent":80},
+		"timestamp":"2026-05-02T12:00:00Z"
+	}`)
+	second := []byte(`{
+		"node_id":"node-1",
+		"source":"docker",
+		"target_id":"container-id",
+		"container_name":"nginx",
+		"metrics":{"cpu_usage_percent":81},
+		"timestamp":"2026-05-02T12:01:59Z"
+	}`)
+	third := []byte(`{
+		"node_id":"node-1",
+		"source":"docker",
+		"target_id":"container-id",
+		"container_name":"nginx",
+		"metrics":{"cpu_usage_percent":82},
+		"timestamp":"2026-05-02T12:02:00Z"
+	}`)
+
+	for _, value := range [][]byte{first, second} {
+		if err := handler.Handle(context.Background(), kafka.Message{Topic: "container.metrics", Value: value}); err != nil {
+			t.Fatalf("Handle() error = %v", err)
+		}
+	}
+	if len(store.incidents) != 0 {
+		t.Fatalf("incidents before duration = %d, want 0", len(store.incidents))
+	}
+
+	if err := handler.Handle(context.Background(), kafka.Message{Topic: "container.metrics", Value: third}); err != nil {
+		t.Fatalf("Handle() error = %v", err)
+	}
+	if len(store.incidents) != 1 {
+		t.Fatalf("incidents after duration = %d, want 1", len(store.incidents))
+	}
+}
+
+func TestHandlerDoesNotCreateDuplicateIncidentForSameRuleAndTarget(t *testing.T) {
+	store := &recordingStore{rules: []analyzer.ThresholdRule{{
+		ID:        "high-cpu",
+		TargetID:  "container-id",
+		Metric:    analyzer.MetricCPUUsagePercent,
+		Operator:  analyzer.OperatorGreaterThan,
+		Threshold: 80,
+		Severity:  "critical",
+	}}}
+	state := &recordingState{}
+	handler := NewHandler(Config{
+		MetricsTopic: "container.metrics",
+		EventsTopic:  "container.events",
+	}, store, state, nil)
+	value := []byte(`{
+		"node_id":"node-1",
+		"source":"docker",
+		"target_id":"container-id",
+		"container_name":"nginx",
+		"metrics":{"cpu_usage_percent":91.5},
+		"timestamp":"2026-05-02T12:00:00Z"
+	}`)
+
+	for range 2 {
+		if err := handler.Handle(context.Background(), kafka.Message{Topic: "container.metrics", Value: value}); err != nil {
+			t.Fatalf("Handle() error = %v", err)
+		}
+	}
+
+	if len(store.incidents) != 1 {
+		t.Fatalf("incidents = %d, want 1", len(store.incidents))
 	}
 }

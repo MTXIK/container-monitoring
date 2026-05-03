@@ -11,9 +11,11 @@ type Metric struct {
 
 type ThresholdRule struct {
 	ID             string
+	TargetID       string
 	Metric         MetricName
 	Operator       Operator
 	Threshold      float64
+	Duration       time.Duration
 	Severity       string
 	RecoveryAction string
 }
@@ -36,8 +38,11 @@ const (
 type Operator string
 
 const (
-	OperatorGreaterThan Operator = "gt"
-	OperatorLessThan    Operator = "lt"
+	OperatorGreaterThan        Operator = "gt"
+	OperatorLessThan           Operator = "lt"
+	OperatorGreaterThanOrEqual Operator = "gte"
+	OperatorLessThanOrEqual    Operator = "lte"
+	OperatorEqual              Operator = "eq"
 )
 
 type Incident struct {
@@ -46,6 +51,7 @@ type Incident struct {
 	TargetID       string
 	MetricName     string
 	Value          float64
+	Duration       time.Duration
 	Severity       string
 	RecoveryAction string
 	StartedAt      time.Time
@@ -54,6 +60,9 @@ type Incident struct {
 func Evaluate(metric Metric, rules []ThresholdRule) []Incident {
 	incidents := make([]Incident, 0)
 	for _, rule := range rules {
+		if rule.TargetID != "" && rule.TargetID != metric.TargetID {
+			continue
+		}
 		value, ok := metricValue(metric, rule.Metric)
 		if !ok || !matches(value, rule.Operator, rule.Threshold) {
 			continue
@@ -64,6 +73,7 @@ func Evaluate(metric Metric, rules []ThresholdRule) []Incident {
 			TargetID:       metric.TargetID,
 			MetricName:     string(rule.Metric),
 			Value:          value,
+			Duration:       rule.Duration,
 			Severity:       rule.Severity,
 			RecoveryAction: rule.RecoveryAction,
 			StartedAt:      metric.Timestamp,
@@ -83,6 +93,12 @@ func matches(value float64, operator Operator, threshold float64) bool {
 		return value > threshold
 	case OperatorLessThan:
 		return value < threshold
+	case OperatorGreaterThanOrEqual:
+		return value >= threshold
+	case OperatorLessThanOrEqual:
+		return value <= threshold
+	case OperatorEqual:
+		return value == threshold
 	default:
 		return false
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/nikponomarevan/container-monitoring-core/internal/analyzer"
 	"github.com/nikponomarevan/container-monitoring-core/internal/consumer/kafka"
@@ -20,12 +21,15 @@ type Store interface {
 	SaveEvent(ctx context.Context, event domain.Event) error
 	UpsertTarget(ctx context.Context, target domain.Target) error
 	EnabledRules(ctx context.Context) ([]analyzer.ThresholdRule, error)
+	HasOpenIncident(ctx context.Context, ruleID, targetID string) (bool, error)
 	CreateIncident(ctx context.Context, incident domain.Incident) (domain.Incident, error)
 }
 
 type State interface {
 	SetLatestMetrics(ctx context.Context, metric domain.MetricSample) error
 	SetTargetState(ctx context.Context, event domain.Event) error
+	AlertThresholdStartedAt(ctx context.Context, ruleID, targetID string, matchedAt time.Time) (time.Time, error)
+	ClearAlertThreshold(ctx context.Context, ruleID, targetID string) error
 }
 
 type Notifier interface {
@@ -93,7 +97,24 @@ func (h *Handler) handleMetric(ctx context.Context, value []byte) error {
 		Values:    metric.Metrics,
 		Timestamp: metric.Timestamp,
 	}, rules)
+	if h.state != nil {
+		clearNonMatchingRules(ctx, h.state, metric.TargetID, rules, incidents)
+	}
 	for _, candidate := range incidents {
+		ready, err := h.alertReady(ctx, candidate)
+		if err != nil {
+			return err
+		}
+		if !ready {
+			continue
+		}
+		exists, err := h.store.HasOpenIncident(ctx, candidate.RuleID, candidate.TargetID)
+		if err != nil {
+			return err
+		}
+		if exists {
+			continue
+		}
 		incident, err := h.store.CreateIncident(ctx, domain.Incident{
 			RuleID:      candidate.RuleID,
 			TargetID:    candidate.TargetID,
@@ -151,7 +172,7 @@ func targetFromMetric(metric domain.MetricSample) domain.Target {
 		Source:     metric.Source,
 		ExternalID: metric.TargetID,
 		NodeID:     metric.NodeID,
-		Status:     "OK",
+		Status:     "",
 		LastSeenAt: metric.Timestamp,
 	}
 }
@@ -203,6 +224,13 @@ func (h *Handler) createIncidentForEvent(ctx context.Context, event domain.Event
 	if action == "" {
 		return nil
 	}
+	exists, err := h.store.HasOpenIncident(ctx, event.EventType, event.TargetID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
 	incident, err := h.store.CreateIncident(ctx, domain.Incident{
 		RuleID:      event.EventType,
 		TargetID:    event.TargetID,
@@ -225,6 +253,36 @@ func (h *Handler) createIncidentForEvent(ctx context.Context, event domain.Event
 		return h.recoverer.Recover(ctx, incident, action)
 	}
 	return nil
+}
+
+func (h *Handler) alertReady(ctx context.Context, candidate analyzer.Incident) (bool, error) {
+	if candidate.Duration <= 0 || h.state == nil {
+		return true, nil
+	}
+	startedAt, err := h.state.AlertThresholdStartedAt(ctx, candidate.RuleID, candidate.TargetID, candidate.StartedAt)
+	if err != nil {
+		return false, err
+	}
+	return !candidate.StartedAt.Before(startedAt.Add(candidate.Duration)), nil
+}
+
+func clearNonMatchingRules(ctx context.Context, state State, targetID string, rules []analyzer.ThresholdRule, incidents []analyzer.Incident) {
+	matched := make(map[string]struct{}, len(incidents))
+	for _, incident := range incidents {
+		matched[incident.RuleID] = struct{}{}
+	}
+	for _, rule := range rules {
+		if rule.Duration <= 0 {
+			continue
+		}
+		if rule.TargetID != "" && rule.TargetID != targetID {
+			continue
+		}
+		if _, ok := matched[rule.ID]; ok {
+			continue
+		}
+		_ = state.ClearAlertThreshold(ctx, rule.ID, targetID)
+	}
 }
 
 func recoveryActionForEvent(eventType string) string {

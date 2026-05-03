@@ -57,17 +57,17 @@ func (s *Store) UpsertTarget(ctx context.Context, target domain.Target) error {
 	}
 	_, err = s.pool.Exec(ctx, `
 		INSERT INTO containers (id, node_id, name, image, source, external_id, status, labels, last_seen_at, updated_at)
-		VALUES ($1, $2, $3, '', $4, $5, $6, $7, $8, now())
+		VALUES ($1, $2, $3, '', $4, $5, CASE WHEN $6 = '' THEN 'OK' ELSE $6 END, $7, $8, now())
 		ON CONFLICT (id) DO UPDATE SET
 			node_id = EXCLUDED.node_id,
 			name = EXCLUDED.name,
 			source = EXCLUDED.source,
 			external_id = EXCLUDED.external_id,
-			status = EXCLUDED.status,
+			status = CASE WHEN $6 = '' THEN containers.status ELSE EXCLUDED.status END,
 			labels = EXCLUDED.labels,
 			last_seen_at = EXCLUDED.last_seen_at,
 			updated_at = now()
-	`, target.ID, target.NodeID, target.Name, defaultString(target.Source, "docker"), defaultString(target.ExternalID, target.ID), defaultString(target.Status, "OK"), jsonMap(target.Labels), defaultTime(target.LastSeenAt))
+	`, target.ID, target.NodeID, target.Name, defaultString(target.Source, "docker"), defaultString(target.ExternalID, target.ID), target.Status, jsonMap(target.Labels), defaultTime(target.LastSeenAt))
 	return err
 }
 
@@ -131,7 +131,7 @@ func (s *Store) EnabledRules(ctx context.Context) ([]analyzer.ThresholdRule, err
 		return nil, err
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, metric, operator, threshold, severity, recovery_action
+		SELECT id, COALESCE(target_id, ''), metric, operator, threshold, duration, severity, recovery_action
 		FROM alert_rules
 		WHERE enabled = true
 	`)
@@ -143,12 +143,29 @@ func (s *Store) EnabledRules(ctx context.Context) ([]analyzer.ThresholdRule, err
 	var rules []analyzer.ThresholdRule
 	for rows.Next() {
 		var rule analyzer.ThresholdRule
-		if err := rows.Scan(&rule.ID, &rule.Metric, &rule.Operator, &rule.Threshold, &rule.Severity, &rule.RecoveryAction); err != nil {
+		if err := rows.Scan(&rule.ID, &rule.TargetID, &rule.Metric, &rule.Operator, &rule.Threshold, &rule.Duration, &rule.Severity, &rule.RecoveryAction); err != nil {
 			return nil, err
 		}
 		rules = append(rules, rule)
 	}
 	return rules, rows.Err()
+}
+
+func (s *Store) HasOpenIncident(ctx context.Context, ruleID, targetID string) (bool, error) {
+	if err := s.ensureConnected(ctx); err != nil {
+		return false, err
+	}
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM incidents
+			WHERE rule_id = $1
+				AND container_id = $2
+				AND status <> 'resolved'
+		)
+	`, ruleID, targetID).Scan(&exists)
+	return exists, err
 }
 
 func (s *Store) CreateIncident(ctx context.Context, incident domain.Incident) (domain.Incident, error) {
