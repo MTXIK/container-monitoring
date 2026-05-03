@@ -32,9 +32,18 @@ type Repository interface {
 	AcknowledgeIncident(ctx context.Context, id int64) error
 	ResolveIncident(ctx context.Context, id int64) error
 	ListRecoveryActions(ctx context.Context) ([]domain.RecoveryAction, error)
+	GetRecoveryAction(ctx context.Context, id int64) (domain.RecoveryAction, error)
 }
 
-func NewServer(repo Repository) *fiber.App {
+type Recoverer interface {
+	Recover(ctx context.Context, incident domain.Incident, action string) error
+}
+
+func NewServer(repo Repository, recoverers ...Recoverer) *fiber.App {
+	var recoverer Recoverer
+	if len(recoverers) > 0 {
+		recoverer = recoverers[0]
+	}
 	app := fiber.New(fiber.Config{AppName: "container-monitoring-core"})
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: []string{"http://localhost:5173", "http://127.0.0.1:5173"},
@@ -254,7 +263,25 @@ func NewServer(repo Repository) *fiber.App {
 		return c.JSON(actions)
 	})
 	api.Post("/recovery-actions/:id/retry", func(c fiber.Ctx) error {
-		return c.JSON(fiber.Map{"id": c.Params("id"), "status": "retry accepted"})
+		if recoverer == nil {
+			return fiber.NewError(fiber.StatusServiceUnavailable, "recovery retry is not configured")
+		}
+		id, err := strconv.ParseInt(c.Params("id"), 10, 64)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, err.Error())
+		}
+		action, err := repo.GetRecoveryAction(c.Context(), id)
+		if err != nil {
+			return fiber.NewError(fiber.StatusNotFound, err.Error())
+		}
+		incident, err := repo.GetIncident(c.Context(), action.IncidentID)
+		if err != nil {
+			return fiber.NewError(fiber.StatusNotFound, err.Error())
+		}
+		if err := recoverer.Recover(c.Context(), incident, action.ActionType); err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+		}
+		return c.Status(fiber.StatusAccepted).JSON(fiber.Map{"id": action.ID, "status": "retry accepted"})
 	})
 
 	return app

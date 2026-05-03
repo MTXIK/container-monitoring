@@ -33,7 +33,7 @@ VITE_GRAFANA_URL=http://localhost:3000
 VITE_ENABLE_MOCK_FALLBACK=true
 ```
 
-Mock fallback is enabled by default so the UI stays usable when an MVP endpoint is empty or not implemented yet.
+Mock fallback is disabled by default. Set `VITE_ENABLE_MOCK_FALLBACK=true` only for local demos where mock data is intentional.
 
 ## Routes
 

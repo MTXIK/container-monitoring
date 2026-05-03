@@ -174,7 +174,7 @@ export const mockRecoveryActions: RecoveryAction[] = [
     incident_id: "1",
     target_id: "target-nginx",
     action_type: "restart_container",
-    status: "success",
+    status: "succeeded",
     started_at: iso(63),
     finished_at: iso(61),
     result_message: "Docker restart completed",

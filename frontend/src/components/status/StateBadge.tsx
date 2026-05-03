@@ -10,6 +10,8 @@ const styles: Record<string, string> = {
   pending: "border-slate-500/30 bg-slate-500/12 text-slate-300",
   running: "border-sky-500/30 bg-sky-500/12 text-sky-300",
   success: "border-emerald-500/30 bg-emerald-500/12 text-emerald-300",
+  succeeded: "border-emerald-500/30 bg-emerald-500/12 text-emerald-300",
+  skipped: "border-slate-500/30 bg-slate-500/12 text-slate-300",
 };
 
 export function StateBadge({ state, className }: { state: string; className?: string }) {

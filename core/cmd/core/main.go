@@ -64,7 +64,7 @@ func main() {
 		}
 	}()
 
-	app := httpapi.NewServer(repo)
+	app := httpapi.NewServer(repo, recoverer)
 
 	go func() {
 		if err := app.Listen(cfg.HTTPAddr); err != nil {

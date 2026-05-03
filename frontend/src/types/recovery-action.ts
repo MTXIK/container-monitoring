@@ -1,5 +1,5 @@
 export type RecoveryActionType = "notify_only" | "retry_check" | "restart_container";
-export type RecoveryActionStatus = "pending" | "running" | "success" | "failed";
+export type RecoveryActionStatus = "pending" | "running" | "succeeded" | "failed" | "skipped";
 
 export interface RecoveryAction {
   id: string;

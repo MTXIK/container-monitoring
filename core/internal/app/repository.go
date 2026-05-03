@@ -121,3 +121,7 @@ func (r *Repository) FinishRecoveryAction(ctx context.Context, id int64, status,
 func (r *Repository) ListRecoveryActions(ctx context.Context) ([]domain.RecoveryAction, error) {
 	return r.Postgres.ListRecoveryActions(ctx)
 }
+
+func (r *Repository) GetRecoveryAction(ctx context.Context, id int64) (domain.RecoveryAction, error) {
+	return r.Postgres.GetRecoveryAction(ctx, id)
+}

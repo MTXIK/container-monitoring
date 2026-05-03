@@ -50,10 +50,9 @@ VITE_GRAFANA_URL=http://localhost:3000
 VITE_ENABLE_MOCK_FALLBACK=true
 ```
 
-`VITE_ENABLE_MOCK_FALLBACK` is enabled unless set to `false`. It keeps the UI
-usable during demos when an endpoint is empty or temporarily unavailable. Mock
-data lives in `frontend/src/lib/api/mock-data.ts` and is kept separate from the
-API client.
+`VITE_ENABLE_MOCK_FALLBACK` is disabled by default. Set it to `true` only for
+local demos where mock data is intentional. Mock data lives in
+`frontend/src/lib/api/mock-data.ts` and is kept separate from the API client.
 
 ## Routes
 
@@ -201,4 +200,3 @@ Backend ingest updates target status from Docker events:
   npm run lint
   npm run build
   ```
-

@@ -10,7 +10,7 @@ import { mockAlertRules, mockEvents, mockIncidents, mockMetrics, mockRecoveryAct
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 export const GRAFANA_URL = import.meta.env.VITE_GRAFANA_URL ?? "http://localhost:3000";
 export const SWAGGER_URL = `${API_BASE_URL}/swagger/`;
-const MOCK_FALLBACK = import.meta.env.VITE_ENABLE_MOCK_FALLBACK !== "false";
+const MOCK_FALLBACK = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === "true";
 
 type RequestOptions = RequestInit & { fallback?: unknown };
 
@@ -53,12 +53,18 @@ export const api = {
     return data.map(mapMetricSnapshot);
   },
   async targets(): Promise<Target[]> {
-    const metrics = await api.latestMetrics().catch(() => mockMetrics);
+    const metrics = await api.latestMetrics().catch((error) => {
+      if (MOCK_FALLBACK) return mockMetrics;
+      throw error;
+    });
     const data = await request<unknown[]>("/api/v1/targets", { fallback: mockTargets });
     return data.map((item) => mapTarget(item, metrics));
   },
   async target(id: string): Promise<Target | undefined> {
-    const metrics = await api.latestMetrics().catch(() => mockMetrics);
+    const metrics = await api.latestMetrics().catch((error) => {
+      if (MOCK_FALLBACK) return mockMetrics;
+      throw error;
+    });
     const data = await request<unknown>(`/api/v1/targets/${id}`, { fallback: mockTargets.find((item) => item.id === id) });
     return data ? mapTarget(data, metrics) : undefined;
   },
@@ -136,6 +142,6 @@ export const api = {
     return data.map(mapRecoveryAction);
   },
   async retryRecoveryAction(id: string): Promise<void> {
-    await request(`/api/v1/recovery-actions/${id}/retry`, { method: "POST", fallback: { id, status: "retry accepted" } });
+    await request(`/api/v1/recovery-actions/${id}/retry`, { method: "POST", fallback: undefined });
   },
 };

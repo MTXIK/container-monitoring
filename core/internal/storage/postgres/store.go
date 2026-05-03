@@ -431,6 +431,19 @@ func (s *Store) ListRecoveryActions(ctx context.Context) ([]domain.RecoveryActio
 	return actions, rows.Err()
 }
 
+func (s *Store) GetRecoveryAction(ctx context.Context, id int64) (domain.RecoveryAction, error) {
+	if err := s.ensureConnected(ctx); err != nil {
+		return domain.RecoveryAction{}, err
+	}
+	var action domain.RecoveryAction
+	err := s.pool.QueryRow(ctx, `
+		SELECT id, incident_id, target_id, action, status, created_at, finished_at, result_message
+		FROM recovery_actions
+		WHERE id = $1
+	`, id).Scan(&action.ID, &action.IncidentID, &action.TargetID, &action.ActionType, &action.Status, &action.StartedAt, &action.FinishedAt, &action.ResultMessage)
+	return action, err
+}
+
 func (s *Store) setIncidentStatus(ctx context.Context, id int64, status string, resolve bool) error {
 	if err := s.ensureConnected(ctx); err != nil {
 		return err

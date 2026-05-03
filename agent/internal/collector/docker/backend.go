@@ -49,7 +49,7 @@ func (b *Backend) CollectMetrics(ctx context.Context) ([]collector.Metric, error
 	for _, container := range containers {
 		stats, err := b.fetchStats(ctx, container.ID)
 		if err != nil {
-			return nil, err
+			continue
 		}
 		if stats.ID == "" {
 			stats.ID = container.ID

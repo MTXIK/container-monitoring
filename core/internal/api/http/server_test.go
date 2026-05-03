@@ -109,7 +109,23 @@ func (f *fakeRepository) ResolveIncident(_ context.Context, id int64) error {
 	return nil
 }
 func (f *fakeRepository) ListRecoveryActions(context.Context) ([]domain.RecoveryAction, error) {
-	return []domain.RecoveryAction{}, nil
+	actions := make([]domain.RecoveryAction, 0, len(f.recoveryActions))
+	for _, action := range f.recoveryActions {
+		actions = append(actions, action)
+	}
+	return actions, nil
+}
+func (f *fakeRepository) GetRecoveryAction(_ context.Context, id int64) (domain.RecoveryAction, error) {
+	return f.recoveryActions[id], nil
+}
+
+type fakeRecoverer struct {
+	calls []domain.Incident
+}
+
+func (r *fakeRecoverer) Recover(_ context.Context, incident domain.Incident, action string) error {
+	r.calls = append(r.calls, incident)
+	return nil
 }
 
 func TestServerSupportsFrontendIncidentDetails(t *testing.T) {
@@ -200,6 +216,35 @@ func TestServerSupportsFrontendTargetCRUD(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d, want %d", resp.StatusCode, http.StatusNoContent)
+	}
+}
+
+func TestServerRetriesRecoveryAction(t *testing.T) {
+	repo := newFakeRepository()
+	repo.recoveryActions[7] = domain.RecoveryAction{
+		ID:         7,
+		IncidentID: 42,
+		TargetID:   "target-a",
+		ActionType: "restart_container",
+		Status:     "failed",
+	}
+	recoverer := &fakeRecoverer{}
+	app := NewServer(repo, recoverer)
+
+	resp, err := app.Test(newRequest(t, http.MethodPost, "/api/v1/recovery-actions/7/retry", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d: %s", resp.StatusCode, http.StatusAccepted, readBody(t, resp.Body))
+	}
+	if len(recoverer.calls) != 1 {
+		t.Fatalf("recover calls = %d, want 1", len(recoverer.calls))
+	}
+	if recoverer.calls[0].ID != 42 {
+		t.Fatalf("incident id = %d, want 42", recoverer.calls[0].ID)
 	}
 }
 

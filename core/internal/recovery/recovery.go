@@ -63,7 +63,7 @@ func (c *Coordinator) Recover(ctx context.Context, incident domain.Incident, act
 	}
 
 	if action == ActionNotifyOnly {
-		return c.recorder.FinishRecoveryAction(ctx, record.ID, "success", "notify_only")
+		return c.recorder.FinishRecoveryAction(ctx, record.ID, "succeeded", "notify_only")
 	}
 	locked, err := c.locker.AcquireRecoveryLock(ctx, incident.TargetID, c.lockTTL)
 	if err != nil {
@@ -71,7 +71,7 @@ func (c *Coordinator) Recover(ctx context.Context, incident domain.Incident, act
 		return err
 	}
 	if !locked {
-		return c.recorder.FinishRecoveryAction(ctx, record.ID, "failed", "recovery lock is already held")
+		return c.recorder.FinishRecoveryAction(ctx, record.ID, "skipped", "recovery lock is already held")
 	}
 
 	result, err := c.executor.Execute(ctx, Request{
@@ -83,7 +83,7 @@ func (c *Coordinator) Recover(ctx context.Context, incident domain.Incident, act
 		_ = c.recorder.FinishRecoveryAction(ctx, record.ID, "failed", err.Error())
 		return err
 	}
-	return c.recorder.FinishRecoveryAction(ctx, record.ID, "success", result)
+	return c.recorder.FinishRecoveryAction(ctx, record.ID, "succeeded", result)
 }
 
 type DockerExecutor struct {

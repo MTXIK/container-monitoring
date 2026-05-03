@@ -1,6 +1,10 @@
 package docker
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -60,5 +64,45 @@ func TestMetricFromStatsCalculatesDockerResourceMetrics(t *testing.T) {
 	}
 	if metric.BlockReadBytes != 100 || metric.BlockWriteBytes != 250 {
 		t.Fatalf("block = %d/%d, want 100/250", metric.BlockReadBytes, metric.BlockWriteBytes)
+	}
+}
+
+func TestCollectMetricsSkipsContainerWhenStatsDisappear(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/containers/json":
+			_ = json.NewEncoder(w).Encode([]containerSummary{
+				{ID: "missing", Names: []string{"/missing"}},
+				{ID: "alive", Names: []string{"/alive"}},
+			})
+		case "/containers/missing/stats":
+			http.Error(w, "not found", http.StatusNotFound)
+		case "/containers/alive/stats":
+			_ = json.NewEncoder(w).Encode(containerStats{
+				ID:   "alive",
+				Name: "/alive",
+				Read: time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC),
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	backend := &Backend{
+		nodeID:  "node-1",
+		client:  server.Client(),
+		baseURL: server.URL,
+	}
+
+	metrics, err := backend.CollectMetrics(context.Background())
+
+	if err != nil {
+		t.Fatalf("CollectMetrics() error = %v", err)
+	}
+	if len(metrics) != 1 {
+		t.Fatalf("metrics = %d, want 1", len(metrics))
+	}
+	if metrics[0].ContainerID != "alive" {
+		t.Fatalf("container = %q, want alive", metrics[0].ContainerID)
 	}
 }
