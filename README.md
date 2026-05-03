@@ -47,6 +47,7 @@ Local URLs:
 - Core API: `http://localhost:8080`
 - Swagger UI: `http://localhost:8080/swagger/`
 - Grafana: `http://localhost:3000` (`admin` / `admin`)
+- Frontend admin panel: `http://localhost:5173`
 - Demo nginx target: `http://localhost:8081`
 
 Stop the stack:
@@ -88,6 +89,9 @@ Targets:
 
 - `GET /api/v1/targets`
 - `GET /api/v1/targets/:id`
+- `POST /api/v1/targets`
+- `PATCH /api/v1/targets/:id`
+- `DELETE /api/v1/targets/:id`
 
 Metrics from ClickHouse:
 
@@ -104,10 +108,13 @@ Alert rules:
 
 - `GET /api/v1/alert-rules`
 - `POST /api/v1/alert-rules`
+- `PATCH /api/v1/alert-rules/:id`
+- `DELETE /api/v1/alert-rules/:id`
 
 Incidents:
 
 - `GET /api/v1/incidents`
+- `GET /api/v1/incidents/:id`
 - `POST /api/v1/incidents/:id/ack`
 - `POST /api/v1/incidents/:id/resolve`
 
@@ -138,6 +145,23 @@ Dashboard panels:
 - Latest container events table.
 
 Grafana reads metrics and events directly from ClickHouse.
+
+## Frontend Admin Panel
+
+The React frontend in `frontend/` is the operational admin panel for the MVP.
+It covers targets, alert rules, incidents, recovery actions, events, latest
+metrics, and links to Grafana for detailed charts.
+
+Run locally:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+See `docs/frontend.md` for routes, architecture, API mapping, configuration,
+and the defense demo flow.
 
 ## Demo Recovery Scenario
 

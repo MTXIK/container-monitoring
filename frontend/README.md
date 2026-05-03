@@ -2,6 +2,13 @@
 
 React/Vite admin panel for the container monitoring MVP.
 
+This frontend is an administrative panel, not a Grafana replacement. Grafana is
+still used for detailed ClickHouse-backed time-series dashboards. The frontend
+is used for operational workflows: targets, alert rules, incidents, recovery
+actions, events, latest metrics, and links into Grafana.
+
+Full documentation: [`../docs/frontend.md`](../docs/frontend.md)
+
 ## Local Development
 
 ```bash
@@ -27,6 +34,18 @@ VITE_ENABLE_MOCK_FALLBACK=true
 ```
 
 Mock fallback is enabled by default so the UI stays usable when an MVP endpoint is empty or not implemented yet.
+
+## Routes
+
+- `/dashboard` - platform summary, recent incidents/events, top resource users.
+- `/targets` - target table with status/source/search filters.
+- `/targets/:id` - target profile, labels, latest metrics, related activity.
+- `/alert-rules` - alert rule CRUD.
+- `/incidents` - incident table with acknowledge/resolve actions.
+- `/incidents/:id` - incident details, timeline, recovery actions.
+- `/recovery-actions` - self-healing action log and retry.
+- `/events` - Docker event journal.
+- `/metrics` - latest metrics table and Grafana link.
 
 ## Commands
 
