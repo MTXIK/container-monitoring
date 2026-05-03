@@ -61,6 +61,60 @@ curl -sS http://localhost:8080/ready | jq
 curl -sS http://localhost:8081 >/dev/null
 ```
 
+## Demo Targets Stack
+
+The default stack contains one demo target, `target-nginx`. For a richer
+demonstration of monitoring features, run the stack with the demo-targets
+override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.demo-targets.yml up --build
+```
+
+This starts the core platform plus additional containers designed for manual
+testing and defense demonstrations.
+
+Demo services:
+
+| Service | Purpose | Useful checks |
+| --- | --- | --- |
+| `demo-nginx-stable` | Stable HTTP target | Discovery, latest metrics, Grafana panels |
+| `demo-cpu-stress` | Continuous CPU load | CPU threshold alerts, duration rules, deduplication |
+| `demo-memory-stress` | Controlled memory pressure | Memory metrics and memory alert rules |
+| `demo-flaky` | Exits and restarts repeatedly | Docker `die`, `start`, and restart event handling |
+| `demo-manual-recovery` | Manually stopped nginx target | `container_stopped` incident and restart recovery |
+| `demo-labels` | Target with rich labels | Metadata/labels display and target details |
+
+Demo target URLs:
+
+- `demo-nginx-stable`: `http://localhost:8082`
+- `demo-manual-recovery`: `http://localhost:8083`
+- `demo-labels`: `http://localhost:8084`
+
+Readiness checks for HTTP demo targets:
+
+```bash
+curl -sS http://localhost:8082 >/dev/null
+curl -sS http://localhost:8083 >/dev/null
+curl -sS http://localhost:8084 >/dev/null
+```
+
+Stop only the demo targets while keeping the platform running:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.demo-targets.yml stop \
+  demo-nginx-stable demo-cpu-stress demo-memory-stress demo-flaky \
+  demo-manual-recovery demo-labels
+```
+
+Remove only stopped demo target containers:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.demo-targets.yml rm -f \
+  demo-nginx-stable demo-cpu-stress demo-memory-stress demo-flaky \
+  demo-manual-recovery demo-labels
+```
+
 ## Automated E2E
 
 With the stack running, execute:
@@ -119,6 +173,39 @@ If `TARGET_ID` is empty, wait one agent collection interval and repeat:
 sleep 8
 curl -sS http://localhost:8080/api/v1/targets | jq
 ```
+
+When running with `docker-compose.demo-targets.yml`, capture specific demo
+target ids:
+
+```bash
+STABLE_TARGET_ID="$(curl -sS http://localhost:8080/api/v1/targets \
+  | jq -r '.[] | select(.name | contains("demo-nginx-stable")) | .id' \
+  | head -n 1)"
+CPU_TARGET_ID="$(curl -sS http://localhost:8080/api/v1/targets \
+  | jq -r '.[] | select(.name | contains("demo-cpu-stress")) | .id' \
+  | head -n 1)"
+MEMORY_TARGET_ID="$(curl -sS http://localhost:8080/api/v1/targets \
+  | jq -r '.[] | select(.name | contains("demo-memory-stress")) | .id' \
+  | head -n 1)"
+FLAKY_TARGET_ID="$(curl -sS http://localhost:8080/api/v1/targets \
+  | jq -r '.[] | select(.name | contains("demo-flaky")) | .id' \
+  | head -n 1)"
+RECOVERY_TARGET_ID="$(curl -sS http://localhost:8080/api/v1/targets \
+  | jq -r '.[] | select(.name | contains("demo-manual-recovery")) | .id' \
+  | head -n 1)"
+LABELS_TARGET_ID="$(curl -sS http://localhost:8080/api/v1/targets \
+  | jq -r '.[] | select(.name | contains("demo-labels")) | .id' \
+  | head -n 1)"
+
+printf 'stable=%s\ncpu=%s\nmemory=%s\nflaky=%s\nrecovery=%s\nlabels=%s\n' \
+  "$STABLE_TARGET_ID" "$CPU_TARGET_ID" "$MEMORY_TARGET_ID" \
+  "$FLAKY_TARGET_ID" "$RECOVERY_TARGET_ID" "$LABELS_TARGET_ID"
+```
+
+Pass criteria:
+
+- Every variable is non-empty when the demo-targets override is running.
+- The target names contain the matching service names.
 
 ### TC-BL-001: Target Discovery
 
@@ -859,6 +946,231 @@ Fail conditions:
 
 - Grafana shows ClickHouse datasource errors.
 - Panels remain empty while API metrics/events are populated.
+
+### TC-BL-023: Demo Stable Target
+
+Purpose: verify the additional stable demo HTTP target.
+
+Precondition:
+
+- Stack is running with `docker-compose.demo-targets.yml`.
+- `STABLE_TARGET_ID` is set.
+
+Steps:
+
+```bash
+curl -sS http://localhost:8082 >/dev/null
+curl -sS "http://localhost:8080/api/v1/targets/$STABLE_TARGET_ID" | jq
+curl -sS "http://localhost:8080/api/v1/metrics/latest?target_id=$STABLE_TARGET_ID&limit=5" | jq
+```
+
+Expected result:
+
+- HTTP endpoint on port `8082` responds.
+- Target details show a Docker target whose name contains `demo-nginx-stable`.
+- Latest metrics exist for `STABLE_TARGET_ID`.
+
+Fail conditions:
+
+- HTTP service responds but target is not discovered.
+- Target exists but latest metrics stay empty after two collection intervals.
+
+### TC-BL-024: Demo CPU Stress Alert
+
+Purpose: verify high-CPU monitoring with a dedicated CPU load container.
+
+Precondition:
+
+- Stack is running with `docker-compose.demo-targets.yml`.
+- `CPU_TARGET_ID` is set.
+
+Steps:
+
+```bash
+CPU_RULE_ID="$(curl -sS -X POST http://localhost:8080/api/v1/alert-rules \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"name\": \"TC demo CPU stress\",
+    \"target_id\": \"$CPU_TARGET_ID\",
+    \"metric_name\": \"cpu_usage_percent\",
+    \"operator\": \">=\",
+    \"threshold\": 10,
+    \"duration\": \"10s\",
+    \"severity\": \"critical\",
+    \"recovery_policy\": \"notify_only\",
+    \"enabled\": true
+  }" | jq -r '.id')"
+
+sleep 20
+curl -sS "http://localhost:8080/api/v1/metrics/latest?target_id=$CPU_TARGET_ID&limit=5" | jq
+curl -sS http://localhost:8080/api/v1/incidents | jq \
+  --arg rule "$CPU_RULE_ID" '.[] | select(.rule_id == $rule)'
+```
+
+Expected result:
+
+- CPU metric for `demo-cpu-stress` is above the threshold during the test.
+- Exactly one open incident appears for `CPU_RULE_ID`.
+- Incident severity is `critical`.
+
+Fail conditions:
+
+- CPU target produces no metrics.
+- Multiple duplicate open incidents appear for the same rule and target.
+
+### TC-BL-025: Demo Memory Stress Alert
+
+Purpose: verify memory metric collection and memory alerting.
+
+Precondition:
+
+- Stack is running with `docker-compose.demo-targets.yml`.
+- `MEMORY_TARGET_ID` is set.
+
+Steps:
+
+```bash
+MEMORY_RULE_ID="$(curl -sS -X POST http://localhost:8080/api/v1/alert-rules \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"name\": \"TC demo memory stress\",
+    \"target_id\": \"$MEMORY_TARGET_ID\",
+    \"metric_name\": \"memory_usage_bytes\",
+    \"operator\": \">=\",
+    \"threshold\": 50000000,
+    \"duration\": \"10s\",
+    \"severity\": \"warning\",
+    \"recovery_policy\": \"notify_only\",
+    \"enabled\": true
+  }" | jq -r '.id')"
+
+sleep 20
+curl -sS "http://localhost:8080/api/v1/metrics/latest?target_id=$MEMORY_TARGET_ID&limit=5" | jq
+curl -sS http://localhost:8080/api/v1/incidents | jq \
+  --arg rule "$MEMORY_RULE_ID" '.[] | select(.rule_id == $rule)'
+```
+
+Expected result:
+
+- `memory_usage_bytes` for `demo-memory-stress` is above `50000000`.
+- One incident appears for `MEMORY_RULE_ID`.
+- Incident severity is `warning`.
+
+Fail conditions:
+
+- Memory metric remains near zero after the container has been running.
+- Alert rule never creates an incident while the metric is above threshold.
+
+### TC-BL-026: Demo Flaky Lifecycle Events
+
+Purpose: verify lifecycle event ingestion from a repeatedly crashing container.
+
+Precondition:
+
+- Stack is running with `docker-compose.demo-targets.yml`.
+- `FLAKY_TARGET_ID` is set.
+
+Steps:
+
+```bash
+sleep 45
+curl -sS 'http://localhost:8080/api/v1/events?limit=100' | jq \
+  --arg target "$FLAKY_TARGET_ID" '.[] | select(.target_id == $target)'
+curl -sS http://localhost:8080/api/v1/incidents | jq \
+  --arg target "$FLAKY_TARGET_ID" '.[] | select(.target_id == $target)'
+```
+
+Expected result:
+
+- Events include at least one `container_died` or restart-related lifecycle
+  event for `demo-flaky`.
+- An event-driven incident appears for the flaky target.
+- Repeated crashes do not create unlimited duplicate open incidents for the same
+  event rule and target.
+
+Fail conditions:
+
+- The container restarts in Docker but no events reach the API.
+- Each restart creates another duplicate open incident for the same target and
+  event type.
+
+### TC-BL-027: Demo Manual Recovery Target
+
+Purpose: verify the controlled manual stop and recovery flow on a dedicated
+container instead of the default `target-nginx`.
+
+Precondition:
+
+- Stack is running with `docker-compose.demo-targets.yml`.
+- `RECOVERY_TARGET_ID` is set.
+
+Steps:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.demo-targets.yml stop demo-manual-recovery
+sleep 10
+
+curl -sS 'http://localhost:8080/api/v1/events?limit=100' | jq \
+  --arg target "$RECOVERY_TARGET_ID" '.[] | select(.target_id == $target)'
+curl -sS http://localhost:8080/api/v1/incidents | jq \
+  --arg target "$RECOVERY_TARGET_ID" '.[] | select(.target_id == $target and .rule_id == "container_stopped")'
+curl -sS http://localhost:8080/api/v1/recovery-actions | jq \
+  --arg target "$RECOVERY_TARGET_ID" '.[] | select(.target_id == $target)'
+```
+
+Expected result:
+
+- `container_stopped` event appears for `demo-manual-recovery`.
+- `container_stopped` incident appears for the same target.
+- `restart_container` recovery action is recorded.
+- Recovery status is `succeeded`, `failed`, or `skipped`.
+
+Cleanup:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.demo-targets.yml start demo-manual-recovery
+```
+
+Fail conditions:
+
+- Recovery action references a different target.
+- Stop event is stored but recovery is not attempted.
+
+### TC-BL-028: Demo Labels Target
+
+Purpose: verify a target with rich Docker labels is visible and usable as a
+normal monitoring target.
+
+Precondition:
+
+- Stack is running with `docker-compose.demo-targets.yml`.
+- `LABELS_TARGET_ID` is set.
+
+Steps:
+
+```bash
+curl -sS http://localhost:8084 >/dev/null
+curl -sS "http://localhost:8080/api/v1/targets/$LABELS_TARGET_ID" | jq
+curl -sS "http://localhost:8080/api/v1/metrics/latest?target_id=$LABELS_TARGET_ID&limit=5" | jq
+```
+
+Expected result:
+
+- HTTP endpoint on port `8084` responds.
+- Target details show a target whose name contains `demo-labels`.
+- Latest metrics exist for `LABELS_TARGET_ID`.
+- Frontend target details page can open this target without errors.
+
+Note:
+
+- Docker labels are included in the compose file to make the container easy to
+  identify in Docker and future metadata views. Current metric ingestion may not
+  persist every Docker label into the API response.
+
+Fail conditions:
+
+- Target is not discovered.
+- Frontend target details page fails for the labels target.
 
 ## Telegram Scenario
 

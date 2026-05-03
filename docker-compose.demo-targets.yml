@@ -1,0 +1,75 @@
+services:
+  demo-nginx-stable:
+    image: nginx:1.27-alpine
+    ports:
+      - "8082:80"
+    labels:
+      container-monitoring.target: "true"
+      container-monitoring.demo: "true"
+      container-monitoring.scenario: "stable-http"
+      container-monitoring.description: "Stable HTTP target for discovery, metrics, and Grafana panels"
+
+  demo-cpu-stress:
+    image: alpine:3.21
+    command: ["sh", "-c", "while true; do :; done"]
+    labels:
+      container-monitoring.target: "true"
+      container-monitoring.demo: "true"
+      container-monitoring.scenario: "cpu-stress"
+      container-monitoring.description: "CPU load target for threshold alert demonstrations"
+
+  demo-memory-stress:
+    image: python:3.12-alpine
+    command:
+      - "python"
+      - "-c"
+      - |
+        import time
+        blocks = []
+        while True:
+            blocks.append(bytearray(16 * 1024 * 1024))
+            if len(blocks) > 6:
+                blocks.pop(0)
+            time.sleep(2)
+    mem_limit: 192m
+    labels:
+      container-monitoring.target: "true"
+      container-monitoring.demo: "true"
+      container-monitoring.scenario: "memory-stress"
+      container-monitoring.description: "Memory pressure target for memory metric and alert demonstrations"
+
+  demo-flaky:
+    image: alpine:3.21
+    command:
+      - "sh"
+      - "-c"
+      - "echo demo-flaky started; sleep 20; echo demo-flaky exiting; exit 1"
+    restart: always
+    labels:
+      container-monitoring.target: "true"
+      container-monitoring.demo: "true"
+      container-monitoring.scenario: "flaky-restart"
+      container-monitoring.description: "Restarting target for die/start/restart event demonstrations"
+
+  demo-manual-recovery:
+    image: nginx:1.27-alpine
+    ports:
+      - "8083:80"
+    labels:
+      container-monitoring.target: "true"
+      container-monitoring.demo: "true"
+      container-monitoring.scenario: "manual-recovery"
+      container-monitoring.description: "Manual stop target for incident and restart recovery demonstrations"
+
+  demo-labels:
+    image: nginx:1.27-alpine
+    ports:
+      - "8084:80"
+    labels:
+      container-monitoring.target: "true"
+      container-monitoring.demo: "true"
+      container-monitoring.scenario: "labels"
+      container-monitoring.owner: "platform-team"
+      container-monitoring.environment: "demo"
+      container-monitoring.service: "frontend-docs"
+      container-monitoring.description: "Target with rich labels for metadata display demonstrations"
