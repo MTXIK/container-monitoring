@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS container_metrics
 (
     collected_at DateTime64(3),
@@ -26,3 +28,10 @@ CREATE TABLE IF NOT EXISTS container_events
 ENGINE = MergeTree
 PARTITION BY toDate(occurred_at)
 ORDER BY (node_id, container_id, occurred_at);
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DROP TABLE IF EXISTS container_events;
+DROP TABLE IF EXISTS container_metrics;
+-- +goose StatementEnd

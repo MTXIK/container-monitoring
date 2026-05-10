@@ -1,3 +1,5 @@
+x-goose-image: &goose-image ghcr.io/kukymbr/goose-docker:3.27.1
+
 services:
   kafka:
     image: bitnami/kafka:3.7
@@ -29,12 +31,22 @@ services:
       POSTGRES_PASSWORD: container_monitoring
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./core/migrations/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U container_monitoring -d container_monitoring"]
       interval: 5s
       timeout: 5s
       retries: 12
+
+  migrate-postgres:
+    image: *goose-image
+    environment:
+      GOOSE_DRIVER: postgres
+      GOOSE_DBSTRING: host=postgres port=5432 user=container_monitoring password=container_monitoring dbname=container_monitoring sslmode=disable
+    volumes:
+      - ./core/migrations/postgres:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.3
@@ -43,12 +55,22 @@ services:
       - "9000:9000"
     volumes:
       - clickhouse-data:/var/lib/clickhouse
-      - ./core/migrations/clickhouse:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' >/dev/null 2>&1"]
       interval: 5s
       timeout: 5s
       retries: 20
+
+  migrate-clickhouse:
+    image: *goose-image
+    environment:
+      GOOSE_DRIVER: clickhouse
+      GOOSE_DBSTRING: tcp://clickhouse:9000/default
+    volumes:
+      - ./core/migrations/clickhouse:/migrations:ro
+    depends_on:
+      clickhouse:
+        condition: service_healthy
 
   redis:
     image: redis:7
@@ -112,10 +134,10 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
-      clickhouse:
-        condition: service_healthy
+      migrate-postgres:
+        condition: service_completed_successfully
+      migrate-clickhouse:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 

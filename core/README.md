@@ -113,6 +113,10 @@ Run local infrastructure owned by this service:
 docker compose -f deploy/docker-compose.yml up -d
 ```
 
+PostgreSQL and ClickHouse schemas are managed with goose. The Compose file runs
+`migrate-postgres` and `migrate-clickhouse` against `migrations/postgres` and
+`migrations/clickhouse` after the databases become healthy.
+
 Run core directly against local infrastructure:
 
 ```bash
@@ -307,8 +311,7 @@ Full manual and e2e verification steps live in:
 
 - Kafka handler errors are logged and the message is committed so one malformed
   message does not stop the core process.
-- PostgreSQL schema compatibility is partially handled by startup-time
-  `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements.
+- Database schema changes live in goose SQL migrations under `migrations/`.
 - For a clean local database after schema changes, run the root stack with
   `docker compose down -v` before starting again.
 - Telegram is optional. If token or chat id is empty, notification sending is a

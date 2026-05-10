@@ -1,3 +1,5 @@
+-- +goose Up
+-- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS nodes (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -59,3 +61,14 @@ CREATE TABLE IF NOT EXISTS recovery_actions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     finished_at TIMESTAMPTZ
 );
+-- +goose StatementEnd
+
+-- +goose Down
+-- +goose StatementBegin
+DROP TABLE IF EXISTS recovery_actions;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS incidents;
+DROP TABLE IF EXISTS alert_rules;
+DROP TABLE IF EXISTS containers;
+DROP TABLE IF EXISTS nodes;
+-- +goose StatementEnd

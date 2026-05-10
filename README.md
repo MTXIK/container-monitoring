@@ -208,6 +208,14 @@ make core-down
 file under `core/deploy/`. For the full local MVP, prefer root-level
 `docker compose up`.
 
+PostgreSQL and ClickHouse schemas are applied by goose migrator services in the
+Compose files. For a clean schema rerun after migration changes, use:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
 ## Data Flow
 
 1. Agent connects to Docker Engine API.
