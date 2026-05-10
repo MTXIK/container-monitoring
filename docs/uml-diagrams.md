@@ -9,18 +9,24 @@ Figures marked as screenshots define the exact screen that should be captured fr
 Insert in section 2.2.
 
 ```mermaid
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
 flowchart LR
     DockerAPI["Docker Engine API"]
 
     subgraph Agent["Go Agent"]
+        direction TB
         ConfigLoader["Config Loader"]
         Runtime["Agent Runtime"]
-        DockerCollector["Docker Collector"]
-        EventWatcher["Docker Event Watcher"]
+        subgraph Collectors["Data collection"]
+            direction TB
+            DockerCollector["Docker Collector"]
+            EventWatcher["Docker Event Watcher"]
+        end
         KafkaPublisher["Kafka Publisher"]
     end
 
     subgraph Kafka["Kafka"]
+        direction TB
         MetricsTopic[("container.metrics")]
         EventsTopic[("container.events")]
     end
@@ -30,9 +36,8 @@ flowchart LR
     ConfigLoader --> Runtime
     Runtime --> DockerCollector
     Runtime --> EventWatcher
-    Runtime --> KafkaPublisher
-    DockerCollector --> DockerAPI
-    EventWatcher --> DockerAPI
+    DockerAPI --> DockerCollector
+    DockerAPI --> EventWatcher
     DockerCollector --> KafkaPublisher
     EventWatcher --> KafkaPublisher
     KafkaPublisher --> MetricsTopic
@@ -46,20 +51,23 @@ flowchart LR
 Insert in section 2.2.1.
 
 ```mermaid
-flowchart TB
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
+flowchart LR
     Cmd["package cmd/agent"]
-    Config["package internal/config"]
-    Runtime["package internal/runtime"]
-    Collector["package internal/collector/docker"]
-    Publisher["package internal/publisher/kafka"]
+
+    subgraph Internal["internal"]
+        direction TB
+        Config["package internal/config"]
+        Runtime["package internal/runtime"]
+        Collector["package internal/collector/docker"]
+        Publisher["package internal/publisher/kafka"]
+    end
 
     Cmd --> Config
     Cmd --> Runtime
-    Cmd --> Collector
-    Cmd --> Publisher
-    Runtime --> Config
     Runtime --> Collector
     Runtime --> Publisher
+    Runtime --> Config
 ```
 
 ## Рисунок 2.3. Алгоритм периодического сбора метрик контейнеров
@@ -67,35 +75,31 @@ flowchart TB
 Insert in section 2.2.2.
 
 ```mermaid
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
 flowchart TB
     Start([Start agent runtime])
     Ticker["Start collect ticker"]
-    Tick{"Ticker tick?"}
-    List["Request container list from Docker Engine API"]
-    ListError{"List request failed?"}
-    LogList["Log error and wait for next tick"]
-    Loop{"Next container exists?"}
-    Stats["Request Docker stats for container"]
-    StatsError{"Stats request failed?"}
-    LogStats["Log container stats error"]
-    Normalize["Normalize CPU, memory, network and block IO metrics"]
-    Append["Add metric sample to batch"]
-    Publish{"Batch is not empty?"}
-    Kafka["Publish metric batch to Kafka topic container.metrics"]
-    Wait["Wait for next tick"]
+    Tick["Wait for ticker tick"]
+    List["Get container list"]
+    ListError{"List error?"}
+    Stats["Request Docker stats"]
+    StatsError{"Stats error?"}
+    Normalize["Normalize metric sample"]
+    Batch["Append sample to batch"]
+    PublishDecision{"Batch has samples?"}
+    Kafka["Publish batch to container.metrics"]
+    NextTick["Wait for next tick"]
+    LogList["Log Docker list error"]
+    LogStats["Log stats error"]
 
-    Start --> Ticker --> Tick
-    Tick --> List
-    List --> ListError
-    ListError -- yes --> LogList --> Wait
-    ListError -- no --> Loop
-    Loop -- yes --> Stats --> StatsError
-    StatsError -- yes --> LogStats --> Loop
-    StatsError -- no --> Normalize --> Append --> Loop
-    Loop -- no --> Publish
-    Publish -- yes --> Kafka --> Wait
-    Publish -- no --> Wait
-    Wait --> Tick
+    Start --> Ticker --> Tick --> List --> ListError
+    ListError -- yes --> LogList --> NextTick
+    ListError -- no --> Stats
+    Stats --> StatsError
+    StatsError -- no --> Normalize --> Batch --> PublishDecision
+    StatsError -- yes --> LogStats --> PublishDecision
+    PublishDecision -- yes --> Kafka --> NextTick
+    PublishDecision -- no --> NextTick
 ```
 
 ## Рисунок 2.4. Последовательность обработки события жизненного цикла контейнера
@@ -125,16 +129,28 @@ sequenceDiagram
 Insert in section 2.2.4.
 
 ```mermaid
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
 flowchart LR
     Stats["Docker stats"]
     Events["Docker events"]
-    Agent["Go Agent"]
-    MetricsTopic[("Kafka topic\ncontainer.metrics")]
-    EventsTopic[("Kafka topic\ncontainer.events")]
+
+    subgraph Agent["Go Agent"]
+        direction TB
+        Collector["Metric collector"]
+        Watcher["Event watcher"]
+        Publisher["Kafka publisher"]
+    end
+
+    subgraph Kafka["Kafka"]
+        direction TB
+        MetricsTopic[("container.metrics")]
+        EventsTopic[("container.events")]
+    end
+
     Core["Core Service"]
 
-    Stats --> Agent --> MetricsTopic --> Core
-    Events --> Agent --> EventsTopic --> Core
+    Stats --> Collector --> Publisher --> MetricsTopic --> Core
+    Events --> Watcher --> Publisher --> EventsTopic --> Core
 ```
 
 ## Рисунок 2.6. Жизненный цикл Go Agent
@@ -142,26 +158,36 @@ flowchart LR
 Insert in section 2.2.5.
 
 ```mermaid
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
 flowchart TB
     Start([Process start])
-    Load["Load configuration"]
-    Collector["Initialize Docker collector"]
-    Publisher["Initialize Kafka publisher"]
-    Runtime["Start agent runtime"]
-    Fork{"Runtime tasks"}
-    Metrics["Collect metrics on ticker"]
-    Events["Read Docker events stream"]
-    PublishMetrics["Publish to container.metrics"]
-    PublishEvents["Publish to container.events"]
-    Signal{"SIGTERM or context canceled?"}
+
+    subgraph Startup["Startup"]
+        direction TB
+        Load["Load configuration"]
+        Collector["Initialize Docker collector"]
+        Publisher["Initialize Kafka publisher"]
+        Runtime["Start agent runtime"]
+    end
+
+    subgraph Work["Concurrent runtime work"]
+        direction TB
+        Metrics["Collect metrics on ticker"]
+        Events["Read Docker events stream"]
+        PublishMetrics["Publish to container.metrics"]
+        PublishEvents["Publish to container.events"]
+    end
+
+    Signal["Receive SIGTERM"]
     Close["Close Kafka publisher"]
     Stop([Process stopped])
 
-    Start --> Load --> Collector --> Publisher --> Runtime --> Fork
-    Fork --> Metrics --> PublishMetrics --> Signal
-    Fork --> Events --> PublishEvents --> Signal
-    Signal -- no --> Fork
-    Signal -- yes --> Close --> Stop
+    Start --> Load --> Collector --> Publisher --> Runtime
+    Runtime --> Metrics --> PublishMetrics
+    Runtime --> Events --> PublishEvents
+    PublishMetrics --> Signal
+    PublishEvents --> Signal
+    Signal --> Close --> Stop
 ```
 
 ## Рисунок 2.7. Компонентная диаграмма центрального сервиса обработки данных
@@ -169,20 +195,34 @@ flowchart TB
 Insert in section 2.3.
 
 ```mermaid
-flowchart TB
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
+flowchart LR
+    Kafka[("Kafka topics")]
+
     subgraph Core["Core Service"]
+        direction LR
         Consumer["Kafka Consumer"]
-        MetricHandler["Metric Handler"]
-        EventHandler["Event Handler"]
-        Analyzer["Analyzer"]
-        IncidentService["Incident Service"]
-        RecoveryService["Recovery Service"]
-        Notifier["Notifier"]
         HTTPAPI["HTTP API"]
-        PostgresRepo["PostgreSQL Repository"]
-        ClickHouseRepo["ClickHouse Repository"]
-        RedisState["Redis State Storage"]
+
+        subgraph Processing["Processing"]
+            direction TB
+            MetricHandler["Metric Handler"]
+            EventHandler["Event Handler"]
+            Analyzer["Analyzer"]
+            IncidentService["Incident Service"]
+            RecoveryService["Recovery Service"]
+            Notifier["Notifier"]
+        end
+
+        subgraph Repositories["Repositories and state"]
+            direction TB
+            PostgresRepo["PostgreSQL Repository"]
+            ClickHouseRepo["ClickHouse Repository"]
+            RedisState["Redis State Storage"]
+        end
     end
+
+    Kafka --> Consumer
 
     Consumer --> MetricHandler
     Consumer --> EventHandler
@@ -191,11 +231,7 @@ flowchart TB
     Analyzer --> IncidentService
     IncidentService --> RecoveryService
     IncidentService --> Notifier
-    HTTPAPI --> IncidentService
     HTTPAPI --> RecoveryService
-    HTTPAPI --> PostgresRepo
-    HTTPAPI --> ClickHouseRepo
-    HTTPAPI --> RedisState
     MetricHandler --> ClickHouseRepo
     MetricHandler --> RedisState
     MetricHandler --> PostgresRepo
@@ -205,6 +241,10 @@ flowchart TB
     IncidentService --> PostgresRepo
     RecoveryService --> PostgresRepo
     RecoveryService --> RedisState
+    HTTPAPI --> IncidentService
+    HTTPAPI --> PostgresRepo
+    HTTPAPI --> ClickHouseRepo
+    HTTPAPI --> RedisState
 ```
 
 ## Рисунок 2.8. UML диаграмма пакетов центрального сервиса
@@ -212,21 +252,30 @@ flowchart TB
 Insert in section 2.3.1.
 
 ```mermaid
-flowchart TB
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
+flowchart LR
     Cmd["package cmd/core"]
-    Config["package internal/config"]
-    Consumer["package internal/consumer"]
+
+    subgraph Entry["entrypoints and adapters"]
+        direction TB
+        Config["package internal/config"]
+        Consumer["package internal/consumer"]
+        HTTP["package internal/http"]
+    end
+
     Service["package internal/service"]
-    Postgres["package internal/repository/postgres"]
-    ClickHouse["package internal/repository/clickhouse"]
-    Redis["package internal/state/redis"]
-    Notifier["package internal/notifier"]
-    Recovery["package internal/recovery"]
-    HTTP["package internal/http"]
+
+    subgraph Integrations["repositories and integrations"]
+        direction TB
+        Postgres["package internal/repository/postgres"]
+        ClickHouse["package internal/repository/clickhouse"]
+        Redis["package internal/state/redis"]
+        Notifier["package internal/notifier"]
+        Recovery["package internal/recovery"]
+    end
 
     Cmd --> Config
     Cmd --> Consumer
-    Cmd --> Service
     Cmd --> HTTP
     Consumer --> Service
     HTTP --> Service
@@ -341,10 +390,12 @@ erDiagram
 Insert in section 2.3.3.
 
 ```mermaid
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
 flowchart LR
     Core["Core Service"]
 
     subgraph PostgreSQL["PostgreSQL"]
+        direction TB
         Targets["targets"]
         Rules["alert_rules"]
         PgEvents["events"]
@@ -353,11 +404,13 @@ flowchart LR
     end
 
     subgraph ClickHouse["ClickHouse"]
-        Metrics["metrics"]
+        direction TB
+        Metrics["container_metrics"]
         AnalyticalEvents["analytical events"]
     end
 
     subgraph Redis["Redis"]
+        direction TB
         Latest["latest metrics"]
         Runtime["runtime state"]
         Locks["recovery locks"]
@@ -380,28 +433,25 @@ flowchart LR
 Insert in section 2.3.4.
 
 ```mermaid
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
 flowchart TB
     Start([Metric received])
     LoadRules["Load enabled alert rules"]
-    NextRule{"Next rule exists?"}
-    Applicable{"Rule applies to target and metric?"}
-    Threshold{"Metric value matches threshold?"}
-    Alert["Create alert event"]
-    Incident["Create or reuse open incident"]
+    Applicable{"Applicable?"}
+    Threshold{"Threshold matched?"}
+    AlertIncident["Create alert event and incident"]
     Notify["Send notification"]
-    Recovery{"Recovery policy configured?"}
+    Recovery{"Recovery policy exists?"}
     Trigger["Trigger recovery action"]
     Finish([Evaluation finished])
 
-    Start --> LoadRules --> NextRule
-    NextRule -- no --> Finish
-    NextRule -- yes --> Applicable
-    Applicable -- no --> NextRule
+    Start --> LoadRules --> Applicable
+    Applicable -- no --> Finish
     Applicable -- yes --> Threshold
-    Threshold -- no --> NextRule
-    Threshold -- yes --> Alert --> Incident --> Notify --> Recovery
-    Recovery -- yes --> Trigger --> NextRule
-    Recovery -- no --> NextRule
+    Threshold -- no --> Finish
+    Threshold -- yes --> AlertIncident --> Notify --> Recovery
+    Recovery -- yes --> Trigger --> Finish
+    Recovery -- no --> Finish
 ```
 
 ## Рисунок 2.13. Диаграмма состояний инцидента
@@ -474,25 +524,32 @@ sequenceDiagram
 Insert in section 2.4.
 
 ```mermaid
-flowchart TB
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
+flowchart LR
     User["User"]
-    Frontend["Frontend admin panel"]
-    HTTP["Core HTTP API"]
-    Swagger["Swagger UI"]
-    Grafana["Grafana"]
-    PostgreSQL["PostgreSQL"]
-    ClickHouse["ClickHouse"]
-    Redis["Redis"]
 
-    User --> Frontend
-    User --> Swagger
-    User --> Grafana
-    Frontend --> HTTP
-    Swagger --> HTTP
+    subgraph UI["User interfaces"]
+        direction TB
+        Frontend["Frontend admin panel"]
+        Swagger["Swagger UI"]
+        Grafana["Grafana"]
+    end
+
+    HTTP["Core HTTP API"]
+
+    subgraph Storage["Platform storages"]
+        direction TB
+        PostgreSQL["PostgreSQL"]
+        ClickHouse["ClickHouse"]
+        Redis["Redis"]
+    end
+
+    User --> Frontend --> HTTP
+    User --> Swagger --> HTTP
+    User --> Grafana --> ClickHouse
     HTTP --> PostgreSQL
     HTTP --> ClickHouse
     HTTP --> Redis
-    Grafana --> ClickHouse
 ```
 
 ## Рисунок 2.17. Последовательность обработки HTTP запроса в Core Service
@@ -585,6 +642,7 @@ Screenshot requirements:
 Insert in section 2.4.4.
 
 ```mermaid
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
 flowchart LR
     Core["Core Service"]
     ClickHouse["ClickHouse analytical storage"]
@@ -615,16 +673,29 @@ Screenshot requirements:
 Insert in section 2.5.1.
 
 ```mermaid
-flowchart TB
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
+flowchart LR
     Repo["container-monitoring"]
-    Agent["agent/"]
-    Core["core/"]
-    Frontend["frontend/"]
-    Contracts["contracts/"]
-    Deploy["core/deploy/"]
-    Docs["docs/"]
-    Compose["docker-compose.yml"]
-    Makefile["Makefile"]
+
+    subgraph Apps["Applications"]
+        direction TB
+        Agent["agent/"]
+        Core["core/"]
+        Frontend["frontend/"]
+    end
+
+    subgraph Support["Shared and documentation"]
+        direction TB
+        Contracts["contracts/"]
+        Deploy["core/deploy/"]
+        Docs["docs/"]
+    end
+
+    subgraph RootFiles["Root orchestration files"]
+        direction TB
+        Compose["docker-compose.yml"]
+        Makefile["Makefile"]
+    end
 
     Repo --> Agent
     Repo --> Core
@@ -641,35 +712,43 @@ flowchart TB
 Insert in section 2.5.2.
 
 ```mermaid
-flowchart TB
-    subgraph Compose["Local Docker Compose environment"]
-        Agent["agent"]
-        Core["core"]
-        Kafka["kafka"]
-        Postgres["postgres"]
-        ClickHouse["clickhouse"]
-        Redis["redis"]
-        Grafana["grafana"]
-        Frontend["frontend"]
-        TargetNginx["target-nginx"]
-    end
-
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
+flowchart LR
     User["User browser"]
     Docker["Docker Engine API"]
 
-    Agent --> Docker
-    Core --> Docker
-    TargetNginx --> Docker
+    subgraph Compose["Local Docker Compose environment"]
+        direction LR
+        subgraph Runtime["Runtime services"]
+            direction TB
+            Agent["agent"]
+            Core["core"]
+            Frontend["frontend"]
+            TargetNginx["target-nginx"]
+        end
+
+        subgraph Infrastructure["Infrastructure services"]
+            direction TB
+            Kafka["kafka"]
+            Postgres["postgres"]
+            ClickHouse["clickhouse"]
+            Redis["redis"]
+            Grafana["grafana"]
+        end
+    end
+
+    User --> Frontend
+    User --> Grafana
+    Frontend --> Core
     Agent --> Kafka
     Core --> Kafka
     Core --> Postgres
     Core --> ClickHouse
     Core --> Redis
     Grafana --> ClickHouse
-    Frontend --> Core
-    User --> Frontend
-    User --> Grafana
-    User --> Core
+    Agent --> Docker
+    Core --> Docker
+    TargetNginx --> Docker
 ```
 
 ## Рисунок 2.25. ER диаграмма основных сущностей PostgreSQL
@@ -789,22 +868,32 @@ classDiagram
 Insert in section 2.5.5.
 
 ```mermaid
-flowchart LR
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
+flowchart TB
     Source["Source code"]
-    Dockerfile["Dockerfile"]
-    Compose["docker-compose.yml"]
-    Migrations["Database migrations"]
-    Infra["Start infrastructure\nKafka, PostgreSQL, ClickHouse, Redis"]
+
+    subgraph BuildInputs["Build inputs"]
+        direction LR
+        Dockerfile["Dockerfile"]
+        Compose["docker-compose.yml"]
+        Migrations["Database migrations"]
+    end
+
+    Build["Build service images"]
+    Infra["Start infrastructure"]
+    ApplyMigrations["Apply migrations"]
     Services["Start agent and core"]
     UI["Start frontend and Grafana"]
     Ready["Container Monitoring platform is ready"]
 
     Source --> Dockerfile
-    Dockerfile --> Compose
+    Source --> Compose
     Source --> Migrations
+    Dockerfile --> Build
     Compose --> Infra
-    Migrations --> Infra
-    Infra --> Services
+    Migrations --> ApplyMigrations
+    Build --> Services
+    Infra --> ApplyMigrations --> Services
     Services --> UI
     UI --> Ready
 ```
