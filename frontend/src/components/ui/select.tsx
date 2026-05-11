@@ -35,7 +35,7 @@ export const SelectContent = React.forwardRef<
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
-      className={cn("relative overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md", className)}
+      className={cn("relative z-50 overflow-hidden rounded-md border bg-card text-card-foreground shadow-md", className)}
       position={position}
       {...props}
     >
