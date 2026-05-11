@@ -30,7 +30,7 @@ func (s *Store) LatestMetrics(ctx context.Context, targetID string, limit int) (
 	if targetID != "" {
 		query += " WHERE container_id = " + quote(targetID)
 	}
-	query += " ORDER BY collected_at DESC LIMIT " + strconv.Itoa(limit) + " FORMAT JSONEachRow"
+	query += " ORDER BY collected_at DESC LIMIT 1 BY node_id, container_id LIMIT " + strconv.Itoa(limit) + " FORMAT JSONEachRow"
 
 	rows, err := s.queryJSONEachRow(ctx, query)
 	if err != nil {
