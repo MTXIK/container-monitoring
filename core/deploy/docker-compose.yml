@@ -57,10 +57,13 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+    environment:
+      CLICKHOUSE_USER: container_monitoring
+      CLICKHOUSE_PASSWORD: container_monitoring
     volumes:
       - clickhouse-data:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "clickhouse-client --user container_monitoring --password container_monitoring --query 'SELECT 1' >/dev/null 2>&1"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -69,7 +72,7 @@ services:
     image: *goose-image
     environment:
       GOOSE_DRIVER: clickhouse
-      GOOSE_DBSTRING: tcp://clickhouse:9000/default
+      GOOSE_DBSTRING: tcp://container_monitoring:container_monitoring@clickhouse:9000/default
     volumes:
       - ../migrations/clickhouse:/migrations:ro
     depends_on:

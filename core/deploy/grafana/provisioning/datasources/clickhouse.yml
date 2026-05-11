@@ -6,5 +6,9 @@ datasources:
     type: grafana-clickhouse-datasource
     access: proxy
     url: http://clickhouse:8123
+    basicAuth: true
+    basicAuthUser: container_monitoring
+    secureJsonData:
+      basicAuthPassword: container_monitoring
     isDefault: true
     editable: true

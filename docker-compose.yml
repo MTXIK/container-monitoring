@@ -57,10 +57,13 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+    environment:
+      CLICKHOUSE_USER: container_monitoring
+      CLICKHOUSE_PASSWORD: container_monitoring
     volumes:
       - clickhouse-data:/var/lib/clickhouse
     healthcheck:
-      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "clickhouse-client --user container_monitoring --password container_monitoring --query 'SELECT 1' >/dev/null 2>&1"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -69,7 +72,7 @@ services:
     image: *goose-image
     environment:
       GOOSE_DRIVER: clickhouse
-      GOOSE_DBSTRING: tcp://clickhouse:9000/default
+      GOOSE_DBSTRING: tcp://container_monitoring:container_monitoring@clickhouse:9000/default
     volumes:
       - ./core/migrations/clickhouse:/migrations:ro
     depends_on:
@@ -128,7 +131,7 @@ services:
       KAFKA_EVENTS_TOPIC: container.events
       KAFKA_GROUP_ID: container-monitoring-core-local
       POSTGRES_DSN: postgres://container_monitoring:container_monitoring@postgres:5432/container_monitoring?sslmode=disable
-      CLICKHOUSE_DSN: http://clickhouse:8123
+      CLICKHOUSE_DSN: http://container_monitoring:container_monitoring@clickhouse:8123
       REDIS_ADDR: redis:6379
       RECOVERY_DOCKER_HOST: unix:///var/run/docker.sock
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
