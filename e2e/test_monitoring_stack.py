@@ -12,6 +12,10 @@ from urllib.request import Request, urlopen
 
 API_URL = os.getenv("E2E_API_URL", "http://localhost:8080").rstrip("/")
 COMPOSE_FILE = os.getenv("E2E_COMPOSE_FILE", "docker-compose.yml")
+DEMO_COMPOSE_FILES = os.getenv(
+    "E2E_DEMO_COMPOSE_FILES",
+    "docker-compose.yml:docker-compose.demo-targets.yml",
+).split(":")
 DEMO_SERVICE = os.getenv("E2E_DEMO_SERVICE", "target-nginx")
 POLL_INTERVAL_SECONDS = float(os.getenv("E2E_POLL_INTERVAL_SECONDS", "2"))
 DEFAULT_TIMEOUT_SECONDS = float(os.getenv("E2E_TIMEOUT_SECONDS", "90"))
@@ -105,6 +109,22 @@ def open_incidents_for_rule(rule_id: str) -> list[dict[str, Any]]:
     return [incident for incident in incidents_for_rule(rule_id) if incident.get("status") != "resolved"]
 
 
+def open_incidents_for_target(target_id: str) -> list[dict[str, Any]]:
+    incidents = api_json("/api/v1/incidents")
+    assert isinstance(incidents, list)
+    return [
+        incident
+        for incident in incidents
+        if incident.get("target_id") == target_id and incident.get("status") != "resolved"
+    ]
+
+
+def resolve_open_incidents(target_id: str, rule_ids: set[str]) -> None:
+    for incident in open_incidents_for_target(target_id):
+        if incident.get("rule_id") in rule_ids:
+            send_status("POST", f"/api/v1/incidents/{incident['id']}/resolve", 204)
+
+
 def wait_for_metric_batch() -> None:
     time.sleep(max(8, POLL_INTERVAL_SECONDS * 2))
 
@@ -143,18 +163,34 @@ def parse_rfc3339(value: str) -> datetime:
 
 
 def find_demo_target() -> dict[str, Any] | None:
+    return find_target_by_name(DEMO_SERVICE)
+
+
+def find_target_by_name(name_part: str) -> dict[str, Any] | None:
     targets = api_json("/api/v1/targets")
     assert isinstance(targets, list)
     for target in targets:
         name = target.get("name", "")
-        if DEMO_SERVICE in name and target.get("source") == "docker":
+        if name_part in name and target.get("source") == "docker":
             return target
     return None
 
 
 def compose(*args: str) -> None:
+    compose_with_files([COMPOSE_FILE], *args)
+
+
+def demo_compose(*args: str) -> None:
+    compose_with_files([file for file in DEMO_COMPOSE_FILES if file], *args)
+
+
+def compose_with_files(files: list[str], *args: str) -> None:
+    command = ["docker", "compose"]
+    for file in files:
+        command.extend(["-f", file])
+    command.extend(args)
     result = subprocess.run(
-        ["docker", "compose", "-f", COMPOSE_FILE, *args],
+        command,
         check=False,
         text=True,
         capture_output=True,
@@ -165,6 +201,13 @@ def compose(*args: str) -> None:
             f"stdout:\n{result.stdout}\n"
             f"stderr:\n{result.stderr}"
         )
+
+
+def http_ok(url: str) -> bool:
+    request = Request(url, headers={"Accept": "*/*"})
+    with urlopen(request, timeout=5) as response:
+        response.read()
+        return response.status < 400
 
 
 def setUpModule():
@@ -308,6 +351,14 @@ class MonitoringStackE2ETest(unittest.TestCase):
             self.assertEqual(resolved["status"], "resolved")
             self.assertTrue(resolved["resolved_at"])
 
+            def new_incident_after_resolve():
+                incidents = open_incidents_for_rule(patched_rule_id)
+                return next((item for item in incidents if item.get("id") != incident["id"]), None)
+
+            repeated_incident = wait_until("new incident after resolving active rule", new_incident_after_resolve)
+            self.assertEqual(repeated_incident["target_id"], target["id"])
+            self.assertEqual(repeated_incident["severity"], "critical")
+
             delete_rule = post_json(
                 "/api/v1/alert-rules",
                 alert_rule_payload(unique_test_name("delete cpu"), target["id"], threshold=1_000_000),
@@ -321,6 +372,83 @@ class MonitoringStackE2ETest(unittest.TestCase):
             for rule_id in (disabled_rule_id, patched_rule_id, delete_rule_id):
                 if rule_id:
                     delete_alert_rule(rule_id)
+
+    def test_alert_rule_operators_duration_and_deduplication(self):
+        target = wait_until("demo target registration", find_demo_target)
+        rule_ids: list[str] = []
+
+        try:
+            operator_cases = [
+                (">", "gt", -1),
+                (">=", "gte", 0),
+                ("<", "lt", 1_000_000),
+                ("<=", "lte", 1_000_000),
+            ]
+            for raw_operator, normalized_operator, threshold in operator_cases:
+                rule = post_json(
+                    "/api/v1/alert-rules",
+                    alert_rule_payload(
+                        unique_test_name(f"operator {normalized_operator}"),
+                        target["id"],
+                        operator=raw_operator,
+                        threshold=threshold,
+                    ),
+                )
+                rule_ids.append(rule["id"])
+                self.assertEqual(rule["operator"], normalized_operator)
+
+            eq_rule = post_json(
+                "/api/v1/alert-rules",
+                alert_rule_payload(
+                    unique_test_name("operator eq accepted"),
+                    target["id"],
+                    operator="==",
+                    threshold=-1,
+                    enabled=False,
+                ),
+            )
+            rule_ids.append(eq_rule["id"])
+            self.assertEqual(eq_rule["operator"], "eq")
+
+            for rule_id in rule_ids[:4]:
+                incident = wait_until(
+                    f"incident for operator rule {rule_id}",
+                    lambda rule_id=rule_id: (open_incidents_for_rule(rule_id) or [None])[0],
+                )
+                self.assertEqual(incident["target_id"], target["id"])
+
+            duration_rule = post_json(
+                "/api/v1/alert-rules",
+                alert_rule_payload(
+                    unique_test_name("duration cpu"),
+                    target["id"],
+                    threshold=0,
+                    duration="15s",
+                ),
+            )
+            rule_ids.append(duration_rule["id"])
+            time.sleep(5)
+            self.assertEqual(open_incidents_for_rule(duration_rule["id"]), [])
+            wait_until(
+                "duration-based incident after threshold window",
+                lambda: (open_incidents_for_rule(duration_rule["id"]) or [None])[0],
+            )
+
+            dedup_rule = post_json(
+                "/api/v1/alert-rules",
+                alert_rule_payload(unique_test_name("dedup cpu"), target["id"], threshold=0, severity="critical"),
+            )
+            rule_ids.append(dedup_rule["id"])
+            wait_until("dedup incident", lambda: (open_incidents_for_rule(dedup_rule["id"]) or [None])[0])
+            wait_for_metric_batch()
+            dedup_incidents = open_incidents_for_rule(dedup_rule["id"])
+            self.assertEqual(len(dedup_incidents), 1)
+        finally:
+            for rule_id in rule_ids:
+                delete_alert_rule(rule_id)
+
+    def test_unknown_incident_id_returns_not_found(self):
+        api_request("GET", "/api/v1/incidents/999999999", expected_status=404)
 
     def test_target_scoped_alert_rule_does_not_create_incident_for_demo_target(self):
         demo_target = wait_until("demo target registration", find_demo_target)
@@ -360,6 +488,7 @@ class MonitoringStackE2ETest(unittest.TestCase):
             self.skipTest(f"Docker Compose is required for recovery e2e test: {exc}")
 
         target = wait_until("demo target registration", find_demo_target)
+        resolve_open_incidents(target["id"], {"container_stopped", "container_died"})
         marker = datetime.now(timezone.utc)
 
         try:
@@ -436,3 +565,209 @@ class MonitoringStackE2ETest(unittest.TestCase):
             return None
 
         wait_until("demo target status returns to OK", target_returns_to_ok)
+
+    def test_recovery_retry_for_failed_action_when_available(self):
+        actions = api_json("/api/v1/recovery-actions")
+        self.assertIsInstance(actions, list)
+        failed_action = next((action for action in actions if action.get("status") == "failed"), None)
+        if failed_action is None:
+            self.skipTest("recovery retry e2e requires an existing failed recovery action")
+
+        before = api_json("/api/v1/recovery-actions")
+        send_status("POST", f"/api/v1/recovery-actions/{failed_action['id']}/retry", 202)
+
+        def retried_action():
+            after = api_json("/api/v1/recovery-actions")
+            if len(after) <= len(before):
+                return None
+            for action in after:
+                if (
+                    action.get("id") != failed_action["id"]
+                    and action.get("incident_id") == failed_action["incident_id"]
+                    and action.get("target_id") == failed_action["target_id"]
+                    and action.get("action_type") == failed_action["action_type"]
+                ):
+                    return action
+            return None
+
+        retry = wait_until("new recovery action after retry", retried_action)
+        self.assertIn(retry["status"], {"running", "succeeded", "failed", "skipped"})
+
+    def test_recovery_lock_does_not_leave_multiple_running_actions_for_target(self):
+        try:
+            compose("start", DEMO_SERVICE)
+        except AssertionError as exc:
+            self.skipTest(f"Docker Compose is required for recovery lock e2e test: {exc}")
+
+        target = wait_until("demo target registration", find_demo_target)
+        resolve_open_incidents(target["id"], {"container_stopped", "container_died"})
+        marker = datetime.now(timezone.utc)
+        try:
+            compose("stop", DEMO_SERVICE)
+            time.sleep(2)
+            compose("stop", DEMO_SERVICE)
+            wait_until("recovery action after repeated stop", lambda: open_incidents_for_target(target["id"]))
+            actions = api_json("/api/v1/recovery-actions")
+            recent_actions = [
+                action
+                for action in actions
+                if action.get("target_id") == target["id"] and parse_rfc3339(action["started_at"]) >= marker
+            ]
+            running_actions = [action for action in recent_actions if action.get("status") == "running"]
+            self.assertLessEqual(len(running_actions), 1)
+        finally:
+            compose("start", DEMO_SERVICE)
+
+    def test_demo_stable_and_labels_targets_are_discovered_and_report_metrics(self):
+        cases = [
+            ("demo-nginx-stable", "http://localhost:8082"),
+            ("demo-labels", "http://localhost:8084"),
+        ]
+        missing = [name for name, _ in cases if find_target_by_name(name) is None]
+        if missing:
+            self.skipTest(f"demo-targets override is not running; missing {', '.join(missing)}")
+
+        for name, url in cases:
+            self.assertTrue(http_ok(url))
+            target = wait_until(f"{name} target registration", lambda name=name: find_target_by_name(name))
+            details = api_json(f"/api/v1/targets/{target['id']}")
+            self.assertIn(name, details["name"])
+
+            def latest_metric():
+                metrics = api_json("/api/v1/metrics/latest", {"target_id": target["id"], "limit": 5})
+                self.assertIsInstance(metrics, list)
+                return next((metric for metric in metrics if metric.get("target_id") == target["id"]), None)
+
+            metric = wait_until(f"latest metric for {name}", latest_metric)
+            self.assertTrue(metric["container_name"])
+
+    def test_demo_cpu_and_memory_stress_alerts(self):
+        cpu_target = find_target_by_name("demo-cpu-stress")
+        memory_target = find_target_by_name("demo-memory-stress")
+        if cpu_target is None or memory_target is None:
+            self.skipTest("demo-targets override is not running; stress targets are missing")
+
+        rule_ids: list[str] = []
+        try:
+            cpu_rule = post_json(
+                "/api/v1/alert-rules",
+                alert_rule_payload(
+                    unique_test_name("demo cpu stress"),
+                    cpu_target["id"],
+                    threshold=10,
+                    duration="10s",
+                    severity="critical",
+                ),
+            )
+            rule_ids.append(cpu_rule["id"])
+
+            memory_rule = post_json(
+                "/api/v1/alert-rules",
+                alert_rule_payload(
+                    unique_test_name("demo memory stress"),
+                    memory_target["id"],
+                    metric_name="memory_usage_bytes",
+                    threshold=50_000_000,
+                    duration="10s",
+                    severity="warning",
+                ),
+            )
+            rule_ids.append(memory_rule["id"])
+
+            def cpu_metric_above_threshold():
+                metrics = api_json("/api/v1/metrics/latest", {"target_id": cpu_target["id"], "limit": 5})
+                metric = next((item for item in metrics if item.get("target_id") == cpu_target["id"]), None)
+                if metric and metric.get("cpu_usage_percent", 0) >= 10:
+                    return metric
+                return None
+
+            wait_until("CPU stress metric above threshold", cpu_metric_above_threshold)
+            cpu_incident = wait_until(
+                "CPU stress incident",
+                lambda: (open_incidents_for_rule(cpu_rule["id"]) or [None])[0],
+            )
+            self.assertEqual(cpu_incident["severity"], "critical")
+
+            def memory_metric_above_threshold():
+                metrics = api_json("/api/v1/metrics/latest", {"target_id": memory_target["id"], "limit": 5})
+                metric = next((item for item in metrics if item.get("target_id") == memory_target["id"]), None)
+                if metric and metric.get("memory_usage_bytes", 0) >= 50_000_000:
+                    return metric
+                return None
+
+            wait_until("memory stress metric above threshold", memory_metric_above_threshold)
+            memory_incident = wait_until(
+                "memory stress incident",
+                lambda: (open_incidents_for_rule(memory_rule["id"]) or [None])[0],
+            )
+            self.assertEqual(memory_incident["severity"], "warning")
+        finally:
+            for rule_id in rule_ids:
+                delete_alert_rule(rule_id)
+
+    def test_demo_flaky_lifecycle_events_do_not_create_unlimited_open_incidents(self):
+        flaky_target = find_target_by_name("demo-flaky")
+        if flaky_target is None:
+            self.skipTest("demo-targets override is not running; demo-flaky target is missing")
+
+        def flaky_events():
+            events = api_json("/api/v1/events", {"target_id": flaky_target["id"], "limit": 100})
+            matched = [
+                event
+                for event in events
+                if event.get("event_type") in {"container_died", "container_stopped", "container_started"}
+            ]
+            return matched or None
+
+        events = wait_until("flaky lifecycle events", flaky_events, timeout=max(DEFAULT_TIMEOUT_SECONDS, 120))
+        self.assertGreaterEqual(len(events), 1)
+        open_incidents = open_incidents_for_target(flaky_target["id"])
+        self.assertGreaterEqual(len(open_incidents), 1)
+        counts: dict[str, int] = {}
+        for incident in open_incidents:
+            counts[incident["rule_id"]] = counts.get(incident["rule_id"], 0) + 1
+        self.assertLessEqual(max(counts.values()), 1)
+
+    def test_demo_manual_recovery_target_stop_creates_recovery_action(self):
+        target = find_target_by_name("demo-manual-recovery")
+        if target is None:
+            self.skipTest("demo-targets override is not running; demo-manual-recovery target is missing")
+
+        resolve_open_incidents(target["id"], {"container_stopped", "container_died"})
+        marker = datetime.now(timezone.utc)
+        try:
+            demo_compose("stop", "demo-manual-recovery")
+
+            def stopped_event():
+                events = api_json("/api/v1/events", {"target_id": target["id"], "limit": 100})
+                for event in events:
+                    if (
+                        event.get("event_type") == "container_stopped"
+                        and parse_rfc3339(event["timestamp"]) >= marker
+                    ):
+                        return event
+                return None
+
+            wait_until("manual recovery stop event", stopped_event)
+
+            def stopped_incident():
+                incidents = open_incidents_for_target(target["id"])
+                return next((incident for incident in incidents if incident.get("rule_id") == "container_stopped"), None)
+
+            incident = wait_until("manual recovery stop incident", stopped_incident)
+
+            def recovery_action():
+                actions = api_json("/api/v1/recovery-actions")
+                for action in actions:
+                    if (
+                        action.get("incident_id") == incident["id"]
+                        and action.get("target_id") == target["id"]
+                        and action.get("action_type") == "restart_container"
+                    ):
+                        return action
+                return None
+
+            recovery = wait_until("manual recovery action", recovery_action)
+            self.assertIn(recovery["status"], {"succeeded", "failed", "skipped"})
+        finally:
+            demo_compose("start", "demo-manual-recovery")
