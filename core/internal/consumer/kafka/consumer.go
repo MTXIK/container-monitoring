@@ -20,11 +20,12 @@ type Handler interface {
 }
 
 type Consumer struct {
-	brokers       []string
-	topics        []string
-	groupID       string
-	readerFactory func() reader
-	logger        *slog.Logger
+	brokers          []string
+	topics           []string
+	groupID          string
+	readerFactory    func() reader
+	topicInitializer func(context.Context) error
+	logger           *slog.Logger
 }
 
 func NewConsumer(brokers []string, topics []string, groupID string) *Consumer {
@@ -37,17 +38,24 @@ func NewConsumer(brokers []string, topics []string, groupID string) *Consumer {
 			GroupTopics: consumer.topics,
 		})
 	}
+	consumer.topicInitializer = consumer.ensureTopics
 	return consumer
 }
 
 func NewConsumerWithReader(r reader) *Consumer {
 	return &Consumer{
-		readerFactory: func() reader { return r },
-		logger:        slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		readerFactory:    func() reader { return r },
+		topicInitializer: func(context.Context) error { return nil },
+		logger:           slog.New(slog.NewTextHandler(os.Stdout, nil)),
 	}
 }
 
 func (c *Consumer) Run(ctx context.Context, handler Handler) error {
+	if c.topicInitializer != nil {
+		if err := c.topicInitializer(ctx); err != nil {
+			return err
+		}
+	}
 	reader := c.readerFactory()
 	defer reader.Close()
 
@@ -70,6 +78,27 @@ func (c *Consumer) Run(ctx context.Context, handler Handler) error {
 			c.logger.Error("kafka commit failed", "topic", msg.Topic, "error", err)
 		}
 	}
+}
+
+func (c *Consumer) ensureTopics(ctx context.Context) error {
+	if len(c.brokers) == 0 || len(c.topics) == 0 {
+		return nil
+	}
+	conn, err := kafkago.DialContext(ctx, "tcp", c.brokers[0])
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	topics := make([]kafkago.TopicConfig, 0, len(c.topics))
+	for _, topic := range c.topics {
+		topics = append(topics, kafkago.TopicConfig{
+			Topic:             topic,
+			NumPartitions:     1,
+			ReplicationFactor: 1,
+		})
+	}
+	return conn.CreateTopics(topics...)
 }
 
 type reader interface {

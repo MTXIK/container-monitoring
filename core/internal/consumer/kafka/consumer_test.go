@@ -64,3 +64,26 @@ func TestConsumerContinuesAfterHandlerError(t *testing.T) {
 		t.Fatalf("commits = %d, want 2", reader.commits)
 	}
 }
+
+func TestConsumerInitializesTopicsBeforeCreatingReader(t *testing.T) {
+	script := &scriptedReader{}
+	calls := []string{}
+	consumer := NewConsumerWithReader(script)
+	consumer.topicInitializer = func(context.Context) error {
+		calls = append(calls, "init")
+		return nil
+	}
+	consumer.readerFactory = func() reader {
+		calls = append(calls, "reader")
+		return script
+	}
+
+	err := consumer.Run(context.Background(), &failingOnceHandler{})
+
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if got, want := calls, []string{"init", "reader"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("calls = %v, want %v", got, want)
+	}
+}
