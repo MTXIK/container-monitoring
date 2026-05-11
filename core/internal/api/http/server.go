@@ -73,7 +73,7 @@ func NewServer(repo Repository, recoverers ...Recoverer) *fiber.App {
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(targets)
+		return jsonArray(c, targets)
 	})
 	api.Get("/targets/:id", func(c fiber.Ctx) error {
 		target, err := repo.GetTarget(c.Context(), c.Params("id"))
@@ -125,7 +125,7 @@ func NewServer(repo Repository, recoverers ...Recoverer) *fiber.App {
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(metrics)
+		return jsonArray(c, metrics)
 	})
 	api.Get("/metrics/history", func(c fiber.Ctx) error {
 		limit, err := intQuery(c, "limit", 500)
@@ -144,7 +144,7 @@ func NewServer(repo Repository, recoverers ...Recoverer) *fiber.App {
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(points)
+		return jsonArray(c, points)
 	})
 	api.Get("/targets/:id/metrics", func(c fiber.Ctx) error {
 		limit, err := intQuery(c, "limit", 500)
@@ -155,7 +155,7 @@ func NewServer(repo Repository, recoverers ...Recoverer) *fiber.App {
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(points)
+		return jsonArray(c, points)
 	})
 	api.Get("/events", func(c fiber.Ctx) error {
 		limit, err := intQuery(c, "limit", 100)
@@ -166,7 +166,7 @@ func NewServer(repo Repository, recoverers ...Recoverer) *fiber.App {
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(events)
+		return jsonArray(c, events)
 	})
 	api.Get("/targets/:id/events", func(c fiber.Ctx) error {
 		limit, err := intQuery(c, "limit", 100)
@@ -177,14 +177,14 @@ func NewServer(repo Repository, recoverers ...Recoverer) *fiber.App {
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(events)
+		return jsonArray(c, events)
 	})
 	api.Get("/alert-rules", func(c fiber.Ctx) error {
 		rules, err := repo.ListAlertRules(c.Context())
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(rules)
+		return jsonArray(c, rules)
 	})
 	api.Post("/alert-rules", func(c fiber.Ctx) error {
 		rule, err := decodeAlertRule(c.Body())
@@ -222,7 +222,7 @@ func NewServer(repo Repository, recoverers ...Recoverer) *fiber.App {
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(incidents)
+		return jsonArray(c, incidents)
 	})
 	api.Get("/incidents/:id", func(c fiber.Ctx) error {
 		id, err := strconv.ParseInt(c.Params("id"), 10, 64)
@@ -260,7 +260,7 @@ func NewServer(repo Repository, recoverers ...Recoverer) *fiber.App {
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(actions)
+		return jsonArray(c, actions)
 	})
 	api.Post("/recovery-actions/:id/retry", func(c fiber.Ctx) error {
 		if recoverer == nil {
@@ -285,6 +285,13 @@ func NewServer(repo Repository, recoverers ...Recoverer) *fiber.App {
 	})
 
 	return app
+}
+
+func jsonArray[T any](c fiber.Ctx, items []T) error {
+	if items == nil {
+		items = []T{}
+	}
+	return c.JSON(items)
 }
 
 type alertRuleRequest struct {

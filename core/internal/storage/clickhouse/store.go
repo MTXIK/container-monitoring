@@ -84,7 +84,7 @@ func (s *Store) Ping(ctx context.Context) error {
 
 func (s *Store) SaveMetric(ctx context.Context, metric domain.MetricSample) error {
 	row := map[string]any{
-		"collected_at": metric.Timestamp.Format(time.RFC3339Nano),
+		"collected_at": clickHouseTime(metric.Timestamp),
 		"node_id":      metric.NodeID,
 		"container_id": metric.TargetID,
 		"name":         metric.ContainerName,
@@ -100,7 +100,7 @@ func (s *Store) SaveMetric(ctx context.Context, metric domain.MetricSample) erro
 
 func (s *Store) SaveEvent(ctx context.Context, event domain.Event) error {
 	row := map[string]any{
-		"occurred_at":  event.Timestamp.Format(time.RFC3339Nano),
+		"occurred_at":  clickHouseTime(event.Timestamp),
 		"node_id":      event.NodeID,
 		"container_id": event.TargetID,
 		"name":         event.ContainerName,
@@ -214,6 +214,10 @@ func pointFromRow(row map[string]any, name string, value float64, unit string) d
 func quote(value string) string {
 	escaped := strings.ReplaceAll(value, "'", "''")
 	return "'" + escaped + "'"
+}
+
+func clickHouseTime(value time.Time) string {
+	return value.UTC().Format("2006-01-02 15:04:05.999")
 }
 
 func stringValue(value any) string {

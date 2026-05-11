@@ -149,6 +149,38 @@ func TestServerSupportsFrontendIncidentDetails(t *testing.T) {
 	}
 }
 
+func TestServerReturnsEmptyArraysForEmptyListResponses(t *testing.T) {
+	app := NewServer(&fakeRepository{
+		targets:         map[string]domain.Target{},
+		alertRules:      map[string]domain.AlertRule{},
+		incidents:       map[int64]domain.Incident{},
+		recoveryActions: map[int64]domain.RecoveryAction{},
+	})
+
+	for _, path := range []string{
+		"/api/v1/targets",
+		"/api/v1/metrics/latest",
+		"/api/v1/metrics/history",
+		"/api/v1/events",
+		"/api/v1/alert-rules",
+		"/api/v1/incidents",
+		"/api/v1/recovery-actions",
+	} {
+		resp, err := app.Test(newRequest(t, http.MethodGet, path, ""))
+		if err != nil {
+			t.Fatal(err)
+		}
+		body := readBody(t, resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s status = %d, want %d: %s", path, resp.StatusCode, http.StatusOK, body)
+		}
+		if body != "[]" {
+			t.Fatalf("%s body = %q, want []", path, body)
+		}
+	}
+}
+
 func TestServerSupportsFrontendAlertRuleUpdateAndDelete(t *testing.T) {
 	repo := newFakeRepository()
 	app := NewServer(repo)
