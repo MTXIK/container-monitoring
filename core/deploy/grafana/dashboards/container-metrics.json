@@ -2,7 +2,7 @@
   "uid": "container-monitoring-mvp",
   "title": "Container Monitoring MVP",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 5,
   "refresh": "10s",
   "time": {
     "from": "now-1h",
@@ -20,7 +20,7 @@
         "query": "SELECT DISTINCT container_id FROM container_metrics ORDER BY container_id",
         "refresh": 1,
         "includeAll": true,
-        "allValue": "",
+        "allValue": ".*",
         "multi": true,
         "current": {
           "selected": true,
@@ -46,9 +46,10 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ClickHouse" },
-          "format": "time_series",
-          "queryType": "sql",
-          "rawSql": "SELECT collected_at AS time, name AS metric, cpu_percent AS value FROM container_metrics WHERE $__timeFilter(collected_at) AND ('$container' = '' OR container_id IN (${container:singlequote})) ORDER BY collected_at"
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT collected_at AS time, name AS metric, cpu_percent AS value FROM container_metrics WHERE $__timeFilter(collected_at) AND match(container_id, '^(${container:regex})$') ORDER BY collected_at"
         }
       ]
     },
@@ -67,9 +68,10 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ClickHouse" },
-          "format": "time_series",
-          "queryType": "sql",
-          "rawSql": "SELECT collected_at AS time, name AS metric, memory_bytes AS value FROM container_metrics WHERE $__timeFilter(collected_at) AND ('$container' = '' OR container_id IN (${container:singlequote})) ORDER BY collected_at"
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
+          "rawSql": "SELECT collected_at AS time, name AS metric, memory_bytes AS value FROM container_metrics WHERE $__timeFilter(collected_at) AND match(container_id, '^(${container:regex})$') ORDER BY collected_at"
         }
       ]
     },
@@ -88,8 +90,9 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ClickHouse" },
-          "format": "time_series",
-          "queryType": "sql",
+          "editorType": "sql",
+          "format": 0,
+          "queryType": "timeseries",
           "rawSql": "SELECT toStartOfMinute(occurred_at) AS time, type AS metric, count() AS value FROM container_events WHERE $__timeFilter(occurred_at) GROUP BY time, type ORDER BY time"
         }
       ]
@@ -109,8 +112,9 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ClickHouse" },
-          "format": "table",
-          "queryType": "sql",
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
           "rawSql": "SELECT count() AS critical_events FROM container_events WHERE $__timeFilter(occurred_at) AND type IN ('container_died', 'container_oom')"
         }
       ]
@@ -123,8 +127,9 @@
       "targets": [
         {
           "datasource": { "type": "grafana-clickhouse-datasource", "uid": "ClickHouse" },
-          "format": "table",
-          "queryType": "sql",
+          "editorType": "sql",
+          "format": 1,
+          "queryType": "table",
           "rawSql": "SELECT occurred_at, node_id, name, container_id, type FROM container_events ORDER BY occurred_at DESC LIMIT 50"
         }
       ]
