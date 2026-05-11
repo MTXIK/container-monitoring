@@ -209,6 +209,8 @@ Pass criteria:
 
 ### TC-BL-001: Target Discovery
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
+
 Purpose: verify that the agent discovers Docker containers and core persists
 them as monitoring targets.
 
@@ -235,6 +237,8 @@ Fail conditions:
 - `last_seen_at` is empty.
 
 ### TC-BL-002: Latest Metrics Are Ingested
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
 
 Purpose: verify metric flow from Docker stats to Kafka, core, ClickHouse, and
 HTTP API.
@@ -263,6 +267,8 @@ Fail conditions:
 
 ### TC-BL-003: Metric History Filtering
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
+
 Purpose: verify that metric history returns points for a target and metric name.
 
 Steps:
@@ -285,6 +291,8 @@ Fail conditions:
 - The endpoint returns a server error for a valid target and metric.
 
 ### TC-BL-004: Alert Rule Create
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
 
 Purpose: verify that the admin API creates a threshold rule with all business
 fields needed by the analyzer.
@@ -325,6 +333,8 @@ Fail conditions:
 - `enabled` becomes false.
 
 ### TC-BL-005: Target-Scoped Alert Does Not Affect Other Targets
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
 
 Purpose: verify that a target-scoped rule is evaluated only for its target.
 
@@ -371,6 +381,8 @@ Fail conditions:
 - A target-scoped rule creates incidents for unrelated targets.
 
 ### TC-BL-006: Operators `gt`, `gte`, `lt`, `lte`, and `eq`
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
 
 Purpose: verify that all supported rule operators are accepted and evaluated.
 
@@ -433,6 +445,8 @@ Fail conditions:
 
 ### TC-BL-007: Duration-Based Alert
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
+
 Purpose: verify that `duration` means the threshold must stay true for the
 configured time window.
 
@@ -475,6 +489,8 @@ Fail conditions:
 
 ### TC-BL-008: Alert Deduplication
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
+
 Purpose: verify that repeated matching metric batches do not create duplicate
 open incidents for the same `rule_id + target_id`.
 
@@ -511,6 +527,8 @@ Fail conditions:
 
 ### TC-BL-009: Incident Acknowledge
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
+
 Purpose: verify that an operator can acknowledge an open incident without
 marking it resolved.
 
@@ -539,6 +557,8 @@ Fail conditions:
 
 ### TC-BL-010: Incident Resolve and New Incident After Resolve
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
+
 Purpose: verify incident closure and dedup reset after resolution.
 
 Steps:
@@ -565,6 +585,8 @@ Fail conditions:
 - `resolved_at` is not populated.
 
 ### TC-BL-011: Disabled Rule Does Not Fire
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
 
 Purpose: verify that disabled alert rules are ignored by the analyzer.
 
@@ -599,6 +621,8 @@ Fail conditions:
 - A disabled rule creates an incident.
 
 ### TC-BL-012: Alert Rule Update Changes Evaluation
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
 
 Purpose: verify that PATCH changes rule behavior.
 
@@ -654,6 +678,8 @@ Fail conditions:
 
 ### TC-BL-013: Alert Rule Delete Stops Future Evaluation
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
+
 Purpose: verify that deleting a rule removes it from active monitoring.
 
 Steps:
@@ -689,6 +715,8 @@ Fail conditions:
 - Deleted rule still appears in the rule list.
 
 ### TC-BL-014: Docker Stop Event Creates Incident and Recovery
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
 
 Purpose: verify event-driven incident and self-healing behavior.
 
@@ -729,6 +757,8 @@ docker compose start target-nginx
 
 ### TC-BL-015: Docker Start Event Restores Target Status
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
+
 Purpose: verify that lifecycle events update target status back to healthy.
 
 Steps:
@@ -753,6 +783,8 @@ Fail conditions:
 - No start event is stored.
 
 ### TC-BL-016: Recovery Retry
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py` when a failed recovery action exists.
 
 Purpose: verify that retry is a real business action, not a mock response.
 
@@ -788,6 +820,8 @@ Fail conditions:
 
 ### TC-BL-017: Recovery Lock Prevents Concurrent Restarts
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
+
 Purpose: verify that duplicate recovery requests for the same target do not run
 concurrently.
 
@@ -820,6 +854,8 @@ docker compose start target-nginx
 
 ### TC-BL-018: Bad Alert Rule Payload Is Rejected
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
+
 Purpose: verify API validation for malformed business input.
 
 Steps:
@@ -849,6 +885,8 @@ Fail conditions:
 - API returns HTTP 201 for invalid duration.
 
 ### TC-BL-019: Unknown Incident Id
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py`.
 
 Purpose: verify not-found behavior for incident details.
 
@@ -949,6 +987,8 @@ Fail conditions:
 
 ### TC-BL-023: Demo Stable Target
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py` when the demo-targets override is running.
+
 Purpose: verify the additional stable demo HTTP target.
 
 Precondition:
@@ -976,6 +1016,8 @@ Fail conditions:
 - Target exists but latest metrics stay empty after two collection intervals.
 
 ### TC-BL-024: Demo CPU Stress Alert
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py` when the demo-targets override is running.
 
 Purpose: verify high-CPU monitoring with a dedicated CPU load container.
 
@@ -1020,6 +1062,8 @@ Fail conditions:
 
 ### TC-BL-025: Demo Memory Stress Alert
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py` when the demo-targets override is running.
+
 Purpose: verify memory metric collection and memory alerting.
 
 Precondition:
@@ -1063,6 +1107,8 @@ Fail conditions:
 
 ### TC-BL-026: Demo Flaky Lifecycle Events
 
+Automated E2E: covered by `e2e/test_monitoring_stack.py` when the demo-targets override is running.
+
 Purpose: verify lifecycle event ingestion from a repeatedly crashing container.
 
 Precondition:
@@ -1095,6 +1141,8 @@ Fail conditions:
   event type.
 
 ### TC-BL-027: Demo Manual Recovery Target
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py` when the demo-targets override is running.
 
 Purpose: verify the controlled manual stop and recovery flow on a dedicated
 container instead of the default `target-nginx`.
@@ -1137,6 +1185,8 @@ Fail conditions:
 - Stop event is stored but recovery is not attempted.
 
 ### TC-BL-028: Demo Labels Target
+
+Automated E2E: covered by `e2e/test_monitoring_stack.py` when the demo-targets override is running.
 
 Purpose: verify a target with rich Docker labels is visible and usable as a
 normal monitoring target.
