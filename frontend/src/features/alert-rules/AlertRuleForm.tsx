@@ -19,6 +19,21 @@ const defaultForm: AlertRuleInput = {
   enabled: true,
 };
 
+const ruleOptions = [
+  { value: "cpu_usage_percent", label: "CPU usage percent", kind: "Default metric" },
+  { value: "memory_usage_bytes", label: "Memory usage bytes", kind: "Metric" },
+  { value: "memory_usage_percent", label: "Memory usage percent", kind: "Metric" },
+  { value: "network_rx_bytes", label: "Network RX bytes", kind: "Metric" },
+  { value: "network_tx_bytes", label: "Network TX bytes", kind: "Metric" },
+  { value: "block_read_bytes", label: "Block read bytes", kind: "Metric" },
+  { value: "block_write_bytes", label: "Block write bytes", kind: "Metric" },
+  { value: "container_started", label: "Container started", kind: "Event" },
+  { value: "container_stopped", label: "Container stopped", kind: "Event" },
+  { value: "container_died", label: "Container died", kind: "Event" },
+  { value: "container_oom", label: "Container OOM", kind: "Event" },
+  { value: "container_restarted", label: "Container restarted", kind: "Event" },
+] as const;
+
 export function AlertRuleForm({ trigger, rule, targets, onSubmit }: { trigger: React.ReactNode; rule?: AlertRule; targets: Target[]; onSubmit: (input: AlertRuleInput) => void }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<AlertRuleInput>(rule ?? defaultForm);
@@ -52,7 +67,18 @@ export function AlertRuleForm({ trigger, rule, targets, onSubmit }: { trigger: R
             </Select>
           </Field>
           <div className="grid gap-4 md:grid-cols-3">
-            <Field label="Metric/Event"><Input value={form.metric_name} onChange={(event) => setForm({ ...form, metric_name: event.target.value })} required /></Field>
+            <Field label="Metric/Event">
+              <Select value={form.metric_name} onValueChange={(value) => setForm({ ...form, metric_name: value })}>
+                <SelectTrigger><SelectValue placeholder="Metric or event" /></SelectTrigger>
+                <SelectContent>
+                  {ruleOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label} · {option.kind}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
             <Field label="Operator">
               <Select value={form.operator} onValueChange={(value) => setForm({ ...form, operator: value as AlertRuleInput["operator"] })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -91,5 +117,5 @@ export function AlertRuleForm({ trigger, rule, targets, onSubmit }: { trigger: R
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="flex flex-col gap-2"><Label>{label}</Label>{children}</div>;
+  return <div className="flex min-w-0 flex-col gap-2"><Label>{label}</Label>{children}</div>;
 }
