@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"strconv"
 	"time"
@@ -289,12 +290,21 @@ func (s *Store) ListAlertRules(ctx context.Context) ([]domain.AlertRule, error) 
 	var rules []domain.AlertRule
 	for rows.Next() {
 		var rule domain.AlertRule
-		if err := rows.Scan(&rule.ID, &rule.Name, &rule.TargetID, &rule.MetricName, &rule.Operator, &rule.Threshold, &rule.Duration, &rule.Severity, &rule.Enabled, &rule.RecoveryAction); err != nil {
+		var targetID sql.NullString
+		if err := rows.Scan(&rule.ID, &rule.Name, &targetID, &rule.MetricName, &rule.Operator, &rule.Threshold, &rule.Duration, &rule.Severity, &rule.Enabled, &rule.RecoveryAction); err != nil {
 			return nil, err
 		}
+		rule.TargetID = alertRuleTargetID(targetID)
 		rules = append(rules, rule)
 	}
 	return rules, rows.Err()
+}
+
+func alertRuleTargetID(targetID sql.NullString) string {
+	if !targetID.Valid {
+		return ""
+	}
+	return targetID.String
 }
 
 func (s *Store) CreateAlertRule(ctx context.Context, rule domain.AlertRule) (domain.AlertRule, error) {
